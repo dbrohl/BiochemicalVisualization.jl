@@ -139,6 +139,7 @@ const ELEMENT_COLORS = [
 hex_colors = [hex(RGB((e ./ 255)...)) for e in ELEMENT_COLORS]
 
 element_color(e) = "0x"*lowercase(get(hex_colors, Int(e), hex_colors[end]))
+element_color_rgb(e) = get(ELEMENT_COLORS, Int(e), hex_colors[end])
 
 function prepare_model(ac::AbstractAtomContainer; type="BALL_AND_STICK")
 	if type == "BACKBONE"
@@ -206,10 +207,10 @@ end
 # TODO architecture while maintaining both Mesh-Libraries is messy. 
 
 # backbone(ac)	   = display_model(ac; type="BACKBONE") TODO write mesh support
-export_backbone(ac)	   = write_mesh_as_ply("../../../../BALL_export.ply", prepare_backbone_model(ac)[2])
-export_ball_and_stick(ac) = write_mesh_as_ply("../../../../BALL_export_ball_and_stick.ply", prepare_ball_and_stick_model(ac)[2])
-export_stick(ac)          = write_mesh_as_ply("../../../../BALL_export_stick.ply", prepare_stick_model(ac)[2])
-export_van_der_waals(ac)  = write_mesh_as_ply("../../../../BALL_export_van_der_waals.ply", prepare_van_der_waals_model(ac)[2])
+export_backbone(ac)	      = write_mesh_as_ply("BALL_export.ply", prepare_backbone_model(ac)[2])
+export_ball_and_stick(ac) = write_mesh_as_ply("BALL_export_ball_and_stick.ply", prepare_ball_and_stick_model(ac)[2])
+export_stick(ac)          = write_mesh_as_ply("BALL_export_stick.ply", prepare_stick_model(ac)[2])
+export_van_der_waals(ac)  = write_mesh_as_ply("BALL_export_van_der_waals.ply", prepare_van_der_waals_model(ac)[2])
 
 
 ball_and_stick(ac) = display_model(ac; type="BALL_AND_STICK")

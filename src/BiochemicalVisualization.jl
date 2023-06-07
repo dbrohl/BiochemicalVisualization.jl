@@ -19,6 +19,8 @@ include("core/representation.jl")
 include("core/visualize.jl")
 include("core/export.jl")
 
+include("helpers/ColoredMesh.jl")
+
 include("models/backbone.jl")
 include("models/ball_and_stick.jl")
 include("models/stick.jl")

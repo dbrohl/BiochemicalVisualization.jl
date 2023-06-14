@@ -40,10 +40,16 @@ function generate_mesh(
         U = T
     end
 
-    spheres = map(a -> Sphere{3, U}((a.r.x, a.r.y, a.r.z), sphere_radius), atoms(ac))
+    sphere_mesh = simplexify(Sphere{3, U}((0,0,0), sphere_radius))
+
+    spheres = map(a -> deepcopy(sphere_mesh), atoms(ac))
+    map(zip(spheres, atoms(ac))) do (s, a)
+        shift!(s, Vec{3, U}(a.r.x, a.r.y, a.r.z))
+    end
+
     sphere_colors = [element_color_rgb(e) for e in atoms_df(ac).element]
     sphere_meshes = map(zip(spheres, sphere_colors)) do (s,c)
-        ColoredMesh(simplexify(s), c)
+        ColoredMesh(s, c)
     end
 
     sticks = [(atom_by_idx(ac, b.a1), 
@@ -58,7 +64,7 @@ function generate_mesh(
     cylinder_colors = collect(Iterators.flatten(
         map(s -> (element_color_rgb(s[1].element), element_color_rgb(s[2].element)), sticks)))
     
-    cylinder_meshes = map(zip(cylinders, cylinder_colors)) do (cy,col)
+     cylinder_meshes = map(zip(cylinders, cylinder_colors)) do (cy,col)
         ColoredMesh(simplexify(cy), col)
     end
 

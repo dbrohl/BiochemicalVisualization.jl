@@ -9,6 +9,7 @@ using JSServe
 using LinearAlgebra
 using MsgPack
 using Statistics
+using Rotations
 
 
 asset_path(parts...) = normpath(joinpath(@__DIR__, "..", "assets", parts...))
@@ -21,7 +22,6 @@ include("core/visualize.jl")
 include("splines/CatmullRom.jl")
 
 include("helpers/ColoredMesh.jl")
-include("helpers/MeshMethods.jl")
 include("core/export.jl")
 
 

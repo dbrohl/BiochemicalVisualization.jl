@@ -71,31 +71,15 @@ function generate_mesh(
             first_cylinder = Stretch(U(1), U(1), U(0.5*distance))(cylinder_mesh)
 
             relative_end_pos = Vec(U.(midpoint - start_atom.r))
-            if(relative_end_pos[2]==0)
-                rotationAxis = Vec(U(0),U(1),U(0))
-            else
-                rotationAxis = Vec(1, -relative_end_pos[1]/relative_end_pos[2], 0) * sign(relative_end_pos[2]) # rotation axis is perpendicular to relative_end_pos and lies in the xy-plane
-            end
-            rotationAngle = Meshes.∠(relative_end_pos, Vec(U(0), U(0), U(1)))
-            first_cylinder = Rotate(AngleAxis(rotationAngle, rotationAxis...))(first_cylinder)
-
+            first_cylinder = rotate_in_direction(first_cylinder, relative_end_pos)
+            
             first_cylinder = Translate(start_atom.r.data)(first_cylinder)
             push!(final_cylinder_meshes, ColoredMesh(first_cylinder, element_color_rgb(start_atom.element)))
 
 
-
-
             # from midpoint to end_atom
             second_cylinder = Stretch(U(1), U(1), U(0.5*distance))(cylinder_mesh)
-
-            relative_end_pos = Vec(U.(end_atom.r - midpoint))
-            if(relative_end_pos[2]==0)
-                rotationAxis = Vec(U(0),U(1),U(0))
-            else
-                rotationAxis = Vec(1, -relative_end_pos[1]/relative_end_pos[2], 0) * sign(relative_end_pos[2]) # rotation axis is perpendicular to relative_end_pos and lies in the xy-plane
-            end
-            rotationAngle = Meshes.∠(relative_end_pos, Vec(U(0), U(0), U(1)))
-            second_cylinder = Rotate(AngleAxis(rotationAngle, rotationAxis...))(second_cylinder)
+            second_cylinder = rotate_in_direction(second_cylinder, relative_end_pos)
 
             second_cylinder = Translate(U.(midpoint)...)(second_cylinder)
             push!(final_cylinder_meshes, ColoredMesh(second_cylinder, element_color_rgb(end_atom.element)))

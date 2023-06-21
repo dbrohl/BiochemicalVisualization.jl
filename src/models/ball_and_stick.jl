@@ -62,7 +62,7 @@ function generate_mesh(
     for bond in bonds(ac)
         start_atom = atom_by_idx(ac, bond.a1)
         end_atom = atom_by_idx(ac, bond.a2)
-        distance = sqrt(sum((end_atom.r-start_atom.r) .^ 2))
+        distance = norm(end_atom.r-start_atom.r)
         midpoint = start_atom.r + 0.5*(end_atom.r-start_atom.r)
         
         if(distance>0)

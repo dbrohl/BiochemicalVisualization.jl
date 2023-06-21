@@ -1,6 +1,6 @@
 function write_mesh_as_ply(path::AbstractString, mesh::Union{SimpleMesh, ColoredMesh})
 
-    the_vertices = collect(vertices(mesh))
+    the_vertices = collect(mesh.vertices)
     faces = []
     for f in elements(topology(mesh))
         push!(faces, f.indices)

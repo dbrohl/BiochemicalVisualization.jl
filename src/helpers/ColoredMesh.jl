@@ -1,7 +1,7 @@
 struct ColoredMesh{Dim,T,V<:AbstractVector{Point{Dim,T}},TP<:Topology} <: Mesh{Dim,T} # TODO Why is it impossible to extend SimpleMesh?
     vertices::V
     topology::TP
-    colors #::AbstractVector{NTuple{3, Integer}}
+    colors::Vector{Tuple{Int64, Int64, Int64}}
 end
 
 function ColoredMesh(mesh::SimpleMesh, colors::AbstractVector{NTuple{3, T}}) where T<:Integer
@@ -49,7 +49,46 @@ function rotate_in_direction(mesh, direction::Vec{3, T}) where T<:AbstractFloat
     return result
 end
 
-function merge_circles(circles::AbstractVector{T}) where T<: Union{SimpleMesh, ColoredMesh}
+function merge_multiple_meshes(meshes::AbstractVector{T}, U) where T<:Union{SimpleMesh, ColoredMesh}
+
+    num_points = sum(map(m -> length(m.vertices), meshes))
+    num_connects = sum(map(m -> nelements(topology(m)), meshes))
+
+    points = Array{Point{3, U}}(undef, num_points)
+    if(T<:ColoredMesh)
+        colors = Array{Tuple{Int64, Int64, Int64}}(undef, num_points)
+    end
+    connects = Array{Connectivity}(undef, num_connects)
+
+    point_offset = 0
+    connect_offset = 0
+    for m in meshes
+        point_len = length(m.vertices)
+
+        for i=1:point_len
+            points[point_offset+i] = m.vertices[i]
+        end
+
+        if(T<:ColoredMesh)
+            colors[point_offset+1 : point_offset+point_len] = m.colors
+        end
+
+        for primitive in elements(topology(m))
+            connects[connect_offset+1] = connect(primitive.indices .+ point_offset)
+            connect_offset += 1
+        end
+
+        point_offset += point_len
+    end
+
+    if(T<:ColoredMesh)
+        return ColoredMesh(SimpleMesh(points, connects), colors)
+    else
+        return SimpleMesh(points, connects)
+    end
+end
+
+function connect_circles_to_tube(circles::AbstractVector{T}) where T<: Union{SimpleMesh, ColoredMesh}
     # collect all points
     points::Vector{Point3} = vcat(map(c -> vertices(c), circles)...)
     colors = nothing
@@ -80,12 +119,20 @@ function merge_circles(circles::AbstractVector{T}) where T<: Union{SimpleMesh, C
                 reverse!(prev_indices)
             end
             for i in eachindex(current_indices)
+                # if(i==1)
+                #     a = connect((current_indices[i], prev_indices[i], prev_indices[end], current_indices[end]))
+                # else
+                #     a = connect((current_indices[i], prev_indices[i], prev_indices[i-1], current_indices[i-1]))
+                # end
+                # push!(connections, a)
                 if(i==1)
-                    a = connect((current_indices[i], prev_indices[i], prev_indices[end], current_indices[end]))
+                    a = connect((current_indices[i], prev_indices[i], prev_indices[end]))
+                    b = connect((current_indices[i], prev_indices[end], current_indices[end]))
                 else
-                    a = connect((current_indices[i], prev_indices[i], prev_indices[i-1], current_indices[i-1]))
+                    a = connect((current_indices[i], prev_indices[i], prev_indices[i-1]))
+                    b = connect((current_indices[i], prev_indices[i-1], current_indices[i-1]))
                 end
-                push!(connections, a)
+                push!(connections, a, b)
             end
         end
 
@@ -145,12 +192,18 @@ function Hemisphere(radius, resolution, T)
             push!(vertices, Point(x, y, z))
 
             if(i>1 && j>1)
-                quad = connect((resolution*(i-2)+(j-1), resolution*(i-2)+j, resolution*(i-1)+j, resolution*(i-1)+j-1))
-                push!(connections, quad)
+                # quad = connect((resolution*(i-2)+(j-1), resolution*(i-2)+j, resolution*(i-1)+j, resolution*(i-1)+j-1))
+                # push!(connections, quad)
+                a = connect((resolution*(i-2)+(j-1), resolution*(i-2)+j, resolution*(i-1)+j))
+                b = connect((resolution*(i-2)+(j-1), resolution*(i-1)+j, resolution*(i-1)+j-1))
+                push!(connections, a, b)
 
                 if(j==resolution) # connect with beginning
-                    quad = connect((resolution*(i-2)+j, resolution*(i-2)+1, resolution*(i-1)+1,  resolution*(i-1)+j))
-                    push!(connections, quad)
+                    # quad = connect((resolution*(i-2)+j, resolution*(i-2)+1, resolution*(i-1)+1,  resolution*(i-1)+j))
+                    # push!(connections, quad)
+                    a = connect((resolution*(i-2)+j, resolution*(i-2)+1, resolution*(i-1)+1))
+                    b = connect((resolution*(i-2)+j, resolution*(i-1)+1,  resolution*(i-1)+j))
+                    push!(connections, a, b)
                 end
 
                 if(i==z_resolution)

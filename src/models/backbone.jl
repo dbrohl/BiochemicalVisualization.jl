@@ -1,7 +1,9 @@
+export prepare_backbone_model
 function prepare_backbone_model(
     ac::AbstractAtomContainer{T}; 
     stick_radius=T(0.2), resolution=30) where {T<:Real}
 
+    start_time = now()
     U = Float64
     if(T <: AbstractFloat)
         U = T
@@ -14,8 +16,8 @@ function prepare_backbone_model(
 
 
 
-    chain_meshes = []
-    chain_colors = map(c->map(channel->Int64(channel*255), (c.r, c.g, c.b)), distinguishable_colors(nchains(ac)))
+    chain_meshes::Vector{ColoredMesh} = []
+    chain_colors = map(c->map(channel->Int64(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end])
     for (chain_num, chain) in enumerate(eachchain(ac))
 
         c_alphas = filter(x -> x.element==Elements.C && x.name=="CA", atoms(chain))
@@ -58,7 +60,7 @@ function prepare_backbone_model(
             circle = ColoredMesh(Translate(spline_points[i].coords...)(circle), in(i%100, [0,1]) ? (255, 0,0) : chain_colors[chain_num])
             push!(circles, circle)
         end
-        spline_mesh = merge_circles(circles)
+        spline_mesh = connect_circles_to_tube(circles)
 
         # add hemispheres to both ends
 
@@ -106,26 +108,50 @@ function prepare_backbone_model(
         for i in 1:resolution # the circles and cap-bases must have the same number of vertices to connect them 1:1
 
             # connect start_cap to tube
+            # if(i==1)
+            #     a = connect((start_cap_base_indices[i], first_circle_indices[i], first_circle_indices[resolution], start_cap_base_indices[resolution]))
+            # else
+            #     a = connect((start_cap_base_indices[i], first_circle_indices[i], first_circle_indices[i-1], start_cap_base_indices[i-1]))
+            # end
+            # push!(connections, a)
             if(i==1)
-                a = connect((start_cap_base_indices[i], first_circle_indices[i], first_circle_indices[resolution], start_cap_base_indices[resolution]))
+                a = connect((start_cap_base_indices[i], first_circle_indices[i], first_circle_indices[resolution]))
+                b = connect((start_cap_base_indices[i], first_circle_indices[resolution], start_cap_base_indices[resolution]))
             else
-                a = connect((start_cap_base_indices[i], first_circle_indices[i], first_circle_indices[i-1], start_cap_base_indices[i-1]))
+                a = connect((start_cap_base_indices[i], first_circle_indices[i], first_circle_indices[i-1]))
+                b = connect((start_cap_base_indices[i], first_circle_indices[i-1], start_cap_base_indices[i-1]))
             end
-            push!(connections, a)
+            push!(connections, a, b)
 
             # # connect end_cap to tube
+            # if(i==1)
+            #     a = connect((end_cap_base_indices[i], last_circle_indices[i], last_circle_indices[resolution], end_cap_base_indices[resolution]))
+            # else
+            #     a = connect((end_cap_base_indices[i], last_circle_indices[i], last_circle_indices[i - 1], end_cap_base_indices[i-1]))
+            # end
+            # push!(connections, a)
             if(i==1)
-                a = connect((end_cap_base_indices[i], last_circle_indices[i], last_circle_indices[resolution], end_cap_base_indices[resolution]))
+                a = connect((end_cap_base_indices[i], last_circle_indices[i], last_circle_indices[resolution]))
+                b = connect((end_cap_base_indices[i], last_circle_indices[resolution], end_cap_base_indices[resolution]))
             else
-                a = connect((end_cap_base_indices[i], last_circle_indices[i], last_circle_indices[i - 1], end_cap_base_indices[i-1]))
+                a = connect((end_cap_base_indices[i], last_circle_indices[i], last_circle_indices[i - 1]))
+                b = connect((end_cap_base_indices[i], last_circle_indices[i - 1], end_cap_base_indices[i-1]))
             end
-            push!(connections, a)
+            push!(connections, a, b)
         end
 
         push!(chain_meshes, ColoredMesh(SimpleMesh(points, connections), colors))
+
+        export_into_arrays("BALL_export_for_js.txt", chain_meshes[end], map(x->x.r, c_alphas))
     end
     
-    return 0, reduce(merge, chain_meshes)
+    #result = merge_multiple_meshes(chain_meshes, U)
+    result = reduce(merge, chain_meshes)
+    println("Generated backbone mesh in $((now()-start_time).value/1000) seconds. ($(length(result.vertices)) vertices)")
+
+
+    
+    return 0, result
 
 end
 
@@ -155,7 +181,7 @@ function circle_example()
     c2 = ColoredMesh(c2, colors_b)
 
 
-    res = merge_circles([c1,c2])
+    res = connect_circles_to_tube([c1,c2])
 end
 
 function debug()

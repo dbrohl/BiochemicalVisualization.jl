@@ -1,3 +1,4 @@
+export generate_mesh
 function prepare_ball_and_stick_model(
         ac::AbstractAtomContainer{T}; 
         sphere_radius=T(0.4), 
@@ -10,6 +11,8 @@ function generate_geometryBasics_representation(
     ac::AbstractAtomContainer{T}; 
     sphere_radius, 
     stick_radius) where {T<:Real}
+
+    start_time = now()
 
     spheres = map(a -> GeometryBasics.Sphere(a.r, sphere_radius), atoms(ac))
     sphere_colors = [element_color(e) for e in atoms_df(ac).element]
@@ -25,7 +28,10 @@ function generate_geometryBasics_representation(
     cylinder_colors = collect(Iterators.flatten(
         map(s -> (element_color(s[1].element), element_color(s[2].element)), sticks)))
 
-    Representation{T}(vcat(spheres, cylinders), vcat(sphere_colors, cylinder_colors))
+    result = Representation{T}(vcat(spheres, cylinders), vcat(sphere_colors, cylinder_colors))
+    
+    println("Generated ball&stick representation in $((now()-start_time).value/1000) seconds. ")
+    return result
 
 end
 
@@ -33,6 +39,8 @@ function generate_mesh(
     ac::AbstractAtomContainer{T}; 
     sphere_radius, 
     stick_radius, resolution) where {T<:Real}
+
+    start_time = now()
 
     #TODO Question: Why parameterized?
 
@@ -57,7 +65,20 @@ function generate_mesh(
     end
 
 
-    # cylinders for bonds
+    final_cylinder_meshes = generate_cylinders(ac, cylinder_mesh, U)
+
+    # combine everything
+    push!(final_cylinder_meshes, final_sphere_meshes...)
+    result = merge_multiple_meshes(final_cylinder_meshes, U)
+    
+    println("Generated ball&stick mesh in $((now()-start_time).value/1000) seconds. ($(length(result.vertices)) vertices)")
+
+    return result
+    
+end
+
+function generate_cylinders(ac, cylinder_mesh, U)
+     # cylinders for bonds
     final_cylinder_meshes::Vector{ColoredMesh} = []
     for bond in bonds(ac)
         start_atom = atom_by_idx(ac, bond.a1)
@@ -86,11 +107,5 @@ function generate_mesh(
             
         end
     end
-
-    # combine everything
-    m1 = reduce(merge, final_sphere_meshes)
-    m2 = reduce(merge, final_cylinder_meshes)
-
-    merge(m1, m2)
-    
+    return final_cylinder_meshes
 end

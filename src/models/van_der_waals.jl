@@ -1,12 +1,17 @@
+export prepare_van_der_waals_model
 function prepare_van_der_waals_model(
     ac::AbstractAtomContainer{T}; resolution=30) where {T<:Real}
     # BasicGeometry Version
     # todo: get vdw radii
+    start_time = now()
     spheres = map(a -> GeometryBasics.Sphere(a.r, max(a.radius, T(1.0))), atoms(ac))
     sphere_colors = [element_color(e) for e in atoms_df(ac).element]
 
     geometryBasicsRepresentation = Representation{T}(spheres, sphere_colors)
+    println("Generated vdw representation in $((now()-start_time).value/1000) seconds. ")
 
+
+    start_time = now()
     # Meshes.jl Version
     U = Float64
     if(T <: AbstractFloat)
@@ -25,7 +30,8 @@ function prepare_van_der_waals_model(
     sphere_meshes = map(zip(spheres, sphere_colors)) do (s,c)
         ColoredMesh(s, c)
     end
-    meshesRepresentation = reduce(merge, sphere_meshes)
+    meshesRepresentation = merge_multiple_meshes(sphere_meshes, U)
+    println("Generated vdw mesh in $((now()-start_time).value/1000) seconds. ($(length(meshesRepresentation.vertices)) vertices)")
 
     return geometryBasicsRepresentation, meshesRepresentation
 end

@@ -1,11 +1,8 @@
-export element_color, 
+export 
 ball_and_stick, 
 stick, 
-van_der_waals, 
-export_backbone, 
-export_ball_and_stick, 
-export_stick, 
-export_van_der_waals
+van_der_waals,
+backbone
 
 const VISUALIZE = ES6Module(asset_path("visualize_structure.js"))::Asset
 
@@ -138,18 +135,18 @@ const ELEMENT_COLORS = [
 
 hex_colors = [hex(RGB((e ./ 255)...)) for e in ELEMENT_COLORS]
 
-element_color(e) = "0x"*lowercase(get(hex_colors, Int(e), hex_colors[end]))
+element_color_web(e) = "#"*lowercase(get(hex_colors, Int(e), hex_colors[end]))
 element_color_rgb(e) = get(ELEMENT_COLORS, Int(e), hex_colors[end])
 
 function prepare_model(ac::AbstractAtomContainer; type="BALL_AND_STICK")
 	if type == "BACKBONE"
-		return prepare_backbone_model(ac)[1]
+		return prepare_backbone_model(ac)
 	elseif type == "BALL_AND_STICK"
-		return prepare_ball_and_stick_model(ac)[1]
+		return prepare_ball_and_stick_model(ac)
 	elseif type == "STICK"
-		return prepare_stick_model(ac)[1]
+		return prepare_stick_model(ac)
 	elseif type == "VAN_DER_WAALS"
-		return prepare_van_der_waals_model(ac)[1]
+		return prepare_van_der_waals_model(ac)
 	end
 
 	return nothing
@@ -204,15 +201,7 @@ function display_model(ac::Union{AbstractAtomContainer, Observable{<:AbstractAto
 
 end
 
-# TODO architecture while maintaining both Mesh-Libraries is messy. 
-
-# backbone(ac)	   = display_model(ac; type="BACKBONE") TODO write mesh support
-export_backbone(ac)	      = write_mesh_as_ply("BALL_export_backbone.ply", prepare_backbone_model(ac)[2])
-export_ball_and_stick(ac) = write_mesh_as_ply("BALL_export_ball_and_stick.ply", prepare_ball_and_stick_model(ac)[2])
-export_stick(ac)          = write_mesh_as_ply("BALL_export_stick.ply", prepare_stick_model(ac)[2])
-export_van_der_waals(ac)  = write_mesh_as_ply("BALL_export_van_der_waals.ply", prepare_van_der_waals_model(ac)[2])
-
-
 ball_and_stick(ac) = display_model(ac; type="BALL_AND_STICK")
 stick(ac)          = display_model(ac; type="STICK")
 van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
+backbone(ac)	   = export_mesh_representation_to_ply("BALL_export_backbone.ply", prepare_backbone_model(ac)) 

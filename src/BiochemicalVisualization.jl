@@ -17,12 +17,16 @@ asset_path(parts...) = normpath(joinpath(@__DIR__, "..", "assets", parts...))
 
 export asset_path
 
+include("helpers/Logger.jl")
+include("helpers/ColoredMesh.jl")
+include("helpers/MeshHelpers.jl")
+
 include("core/representation.jl")
 include("core/visualize.jl")
 
 include("splines/CatmullRom.jl")
 
-include("helpers/ColoredMesh.jl")
+
 include("core/export.jl")
 
 

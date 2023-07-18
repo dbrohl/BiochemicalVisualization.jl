@@ -1,4 +1,49 @@
-function write_mesh_as_ply(path::AbstractString, mesh::Union{SimpleMesh, ColoredMesh})
+function export_mesh_representation_to_ply(path::AbstractString, representation::Representation)
+
+    @assert isempty(representation.primitives) # Only representations containing a mesh are exported here. 
+    @assert length(representation.vertices)%3 == 0
+
+    colors = first(representation.colors).second
+    @assert length(representation.vertices) == length(colors)*3
+
+    stream = open(path, "w")
+
+    #header
+    println(stream, "ply")
+    println(stream, "format ascii 1.0")
+    println(stream, "element vertex $(length(representation.vertices) ÷ 3)")
+    for dim in ["x", "y", "z"]
+        println(stream, "property float $dim") # TODO könnte auch double sein (4 oder 8 bytes)
+    end
+    
+    for channel in ["red", "green", "blue"]
+        println(stream, "property uchar $channel")
+    end
+
+    println(stream, "element face $(length(representation.connections) ÷ 3)")
+    println(stream, "property list uchar int vertex_index") # TODO correct datatypes
+    println(stream, "end_header")
+
+    #Vertex List
+    for i=1:length(colors)
+        x = representation.vertices[(i-1)*3 + 1]
+        y = representation.vertices[(i-1)*3 + 2]
+        z = representation.vertices[(i-1)*3 + 3]
+        r = parse(Int64, colors[i][2:3], base=16)
+        g = parse(Int64, colors[i][4:5], base=16)
+        b = parse(Int64, colors[i][6:7], base=16)
+        println(stream, "$x $y $z $r $g $b")
+    end
+
+    #Face List
+    for i=1:(length(representation.connections) ÷ 3)
+        println(stream, "3 $(representation.connections[(i-1)*3+1]) $(representation.connections[(i-1)*3+2]) $(representation.connections[(i-1)*3+3])")
+    end
+
+    close(stream)
+end
+
+function export_mesh_to_ply(path::AbstractString, mesh::Union{SimpleMesh, ColoredMesh})
 
     the_vertices = collect(mesh.vertices)
     faces = []
@@ -47,45 +92,4 @@ function write_mesh_as_ply(path::AbstractString, mesh::Union{SimpleMesh, Colored
     end
 
     close(stream)
-end
-
-function export_into_arrays(path::AbstractString, mesh::Union{SimpleMesh, ColoredMesh}, c_alpha_positions)
-    
-
-    num_point_coords = length(mesh.vertices) * 3
-    points = Array{Float64}(undef, num_point_coords)
-    a = 0
-    for v in mesh.vertices
-        points[a+1] = v.coords[1]
-        points[a+2] = v.coords[2]
-        points[a+3] = v.coords[3]
-        
-        a+=3
-    end
-
-    num_connects = nelements(topology(mesh)) * 3
-    connections = Array{Int64}(undef, num_connects)  
-    a = 0
-    for f in elements(topology(mesh))
-        if(length(f.indices)!=3)
-            println("quad instead of tri", f, " ", a)
-        else
-        connections[a+1:a+3] = [convert.(Int64, (f.indices .-1))...]
-        end
-        a+=3
-    end
-
-    file = open(path, "w")
-    print(file, "c_alpha_positions=[")
-    for v in c_alpha_positions
-        println(file, "($(v[1]), $(v[2]), $(v[3])), ")
-    end
-    println(file, "]")
-
-    print(file, "vertices=")
-    println(file, points)
-
-    print(file, "connections=")
-    println(file, connections)
-    close(file)
 end

@@ -13,6 +13,9 @@ using Rotations
 using Dates
 
 
+using BenchmarkTools # TODO not necessary for package
+
+
 asset_path(parts...) = normpath(joinpath(@__DIR__, "..", "assets", parts...))
 
 export asset_path

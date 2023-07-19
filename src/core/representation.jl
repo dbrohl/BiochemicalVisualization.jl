@@ -42,7 +42,9 @@ function Representation(mesh::Union{SimpleMesh{Dim, T}, ColoredMesh{Dim, T}}) wh
     a = 0
     for f in elements(topology(mesh))
         @assert length(f.indices)==3
-        connections[a+1:a+3] = [convert.(Int64, (f.indices .-1))...]
+        for i=1:3
+            connections[a+i] = convert(Int64, f.indices[i]-1)
+        end
         a+=3
     end
 

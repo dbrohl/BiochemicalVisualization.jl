@@ -1,30 +1,25 @@
 export CatmullRom
 
 struct CatmullRom
-    controlPoints::AbstractArray{Vec} # vectors support +,*,... (Points do not)
+    controlPoints::AbstractMatrix # 3 rows, n cols
 
-    function CatmullRom(points::AbstractVector{T}) where T<:Point # add first and last point
-        points = map(p -> p.coords, points)
-        CatmullRom(points)
-    end
-
-    function CatmullRom(points::AbstractVector{T}) where T<:Vec # add first and last point
-        prepend!(points, [points[1]-(points[2]-points[1])])
-        push!(points, points[end]+(points[end]-points[end-1]))
+    function CatmullRom(points::AbstractMatrix)
+        points = hcat(points[:, 1] .- (points[:, 2] .- points[:, 1]), points, points[:, end] .+ (points[:, end] .- points[:, end-1]))
         new(points)
     end
 end
 
-function (spline::CatmullRom)(resolution) #t::Real
-    result = []
+# Code adapted from https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline#Code_example_in_Python
+function (spline::CatmullRom)(resolution)
+    result = Matrix(undef, 3, 0)
     i=1
-    while i+3 <= length(spline.controlPoints)
-        result = result[1:end-1] # no duplicate points
+    while i+3 <= size(spline.controlPoints, 2) # loop over quadruple of controlPoints
+        result = result[:, 1:end-1] # no duplicate points
 
-        distance = norm(spline.controlPoints[i+1]-spline.controlPoints[i+2])
-        num_points = max(2, convert(Int64, ceil(resolution * 2* distance)))
-        points = compute_quadruple((spline.controlPoints[i], spline.controlPoints[i+1], spline.controlPoints[i+2], spline.controlPoints[i+3]), num_points)
-        push!(result, points...)
+        distance = norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
+        num_points = max(2, convert(Int64, ceil(resolution * 2 * distance)))
+        points = compute_quadruple((spline.controlPoints[:, i], spline.controlPoints[:, i+1], spline.controlPoints[:, i+2], spline.controlPoints[:, i+3]), num_points)
+        result = [result points]
         i+=1
     end
     return result
@@ -36,27 +31,27 @@ function compute_quadruple((P0, P1, P2, P3), num_points)
     t2 = tRecursion(P2, P1, t1)
     t3 = tRecursion(P3, P2, t2)
 
-    result = []
+    result = Matrix(undef, 3, num_points)
     ts = collect(range(t1, t2, num_points))
 
-    for t in ts
-        A1 = (t1-t)/(t1-t0) * P0 + (t-t0)/(t1-t0) * P1
-        A2 = (t2-t)/(t2-t1) * P1 + (t-t1)/(t2-t1) * P2
-        A3 = (t3-t)/(t3-t2) * P2 + (t-t2)/(t3-t2) * P3
+    for (i, t) in enumerate(ts)
+        A1 = @. (t1-t)/(t1-t0) * P0 + (t-t0)/(t1-t0) * P1
+        A2 = @. (t2-t)/(t2-t1) * P1 + (t-t1)/(t2-t1) * P2
+        A3 = @. (t3-t)/(t3-t2) * P2 + (t-t2)/(t3-t2) * P3
 
-        B1 = (t2-t)/(t2-t0) * A1 + (t-t0)/(t2-t0) * A2
-        B2 = (t3-t)/(t3-t1) * A2 + (t-t1)/(t3-t1) * A3
+        B1 = @. (t2-t)/(t2-t0) * A1 + (t-t0)/(t2-t0) * A2
+        B2 = @. (t3-t)/(t3-t1) * A2 + (t-t1)/(t3-t1) * A3
 
-        C = (t2-t)/(t2-t1) * B1 + (t-t1)/(t2-t1) * B2
-        push!(result, C)
+        C = @. (t2-t)/(t2-t1) * B1 + (t-t1)/(t2-t1) * B2
+        result[:, i] = C
     end
     return result
 end
 
 function tRecursion(pCurr, pPrev, tPrev)
 
-    distance = norm(pCurr - pPrev)
+    distance = norm(pCurr .- pPrev)
     return distance^0.5 + tPrev
 end
 
-# TODO credit, find duplicated calculations, granularity for spline
+# TODO find duplicated calculations, granularity for spline

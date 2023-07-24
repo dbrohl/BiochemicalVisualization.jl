@@ -1,3 +1,5 @@
+export rotate_in_direction!
+
 # Takes a 2D mesh and adds a z-coordinate of 0 to each point
 function lift_into_3d(mesh::SimpleMesh)
     vertices_3d = map(v -> Point(v.coords..., 0), mesh.vertices)
@@ -5,71 +7,68 @@ function lift_into_3d(mesh::SimpleMesh)
     return result
 end
 
+function color!(mesh, new_color)
+    mesh.colors = repeat([new_color], size(mesh.vertices, 2))
+end
+
+function translate!(mesh, vec::AbstractArray{T}) where T <: AbstractFloat 
+    mesh.vertices .+= vec
+end
+
 # Assumes the object in the origin and rotates it, so that its new local z-axis points to direction. 
 # Returns the new object. 
-function rotate_in_direction(mesh, direction::Vec{3, T}) where T<:AbstractFloat
+function rotate_in_direction!(mesh::Union{PlainMesh, PlainNonStdMesh}, direction::AbstractArray{T}) where T<:AbstractFloat
     if(direction[2]==0)
         rotationAxis = Vec(T(0),T(1),T(0))
     else
-        rotationAxis = Vec(1, -direction[1]/direction[2], 0) * sign(direction[2]) # rotation axis is perpendicular to direction and lies in the xy-plane
+        rotationAxis = Vec(T(1), -direction[1]/direction[2], T(0)) * sign(direction[2]) # rotation axis is perpendicular to direction and lies in the xy-plane
     end
-    rotationAngle = Meshes.∠(direction, Vec(T(0), T(0), T(1)))
-    result = Rotate(AngleAxis(rotationAngle, rotationAxis...))(mesh)
-    return result
+    rotationAngle = Meshes.∠(Vec{3,T}(direction...), Vec(T(0), T(0), T(1)))
+    mesh.vertices = (mesh.vertices' * AngleAxis(rotationAngle, rotationAxis...))'
 end
 
 # Merges multiple mesh objects into one. The geometry (vertices/edges/faces) does not change. 
-function merge_multiple_meshes(meshes::AbstractVector{X}) where {Dim, T, X<:Union{SimpleMesh{Dim, T}, ColoredMesh{Dim, T}}}
-    num_points = sum(map(m -> length(m.vertices), meshes))
-    num_connects = sum(map(m -> nelements(topology(m)), meshes))
+function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where {T}
+    num_points = sum(map(m -> size(m.vertices, 2), meshes))
+    num_connects = sum(map(m -> size(m.connections, 2), meshes))
 
-    points = Array{Point{3, T}}(undef, num_points)
-    if(X<:ColoredMesh)
-        colors = Array{Tuple{Int64, Int64, Int64}}(undef, num_points)
-    end
-    connects = Array{Connectivity}(undef, num_connects)
+    points = reduce(hcat, map(m->m.vertices, meshes))
+
+    colors = Array{Tuple{Int64, Int64, Int64}}(undef, num_points)
+    connects = Array{Integer, 2}(undef, 3, num_connects)
 
     point_offset = 0
     connect_offset = 0
     for m in meshes
-        point_len = length(m.vertices)
+        point_len = size(m.vertices, 2)
+        connect_len = size(m.connections, 2)
 
-        for i=1:point_len
-            points[point_offset+i] = m.vertices[i]
-        end
+        
+        colors[point_offset+1 : point_offset+point_len] = m.colors
+        
 
-        if(X<:ColoredMesh)
-            colors[point_offset+1 : point_offset+point_len] = m.colors
-        end
-
-        for primitive in elements(topology(m))
-            connects[connect_offset+1] = connect(primitive.indices .+ point_offset)
-            connect_offset += 1
-        end
+        connects[:, connect_offset+1 : connect_offset+connect_len] = m.connections
+        connects[:, connect_offset+1 : connect_offset+connect_len] .+= point_offset
 
         point_offset += point_len
+        connect_offset += connect_len
     end
 
-    if(X<:ColoredMesh)
-        return ColoredMesh(SimpleMesh(points, connects), colors)
-    else
-        return SimpleMesh(points, connects)
-    end
+    return PlainMesh(points, connects, colors)
 end
 
 # Adds faces between circles to create the surface of a tube. 
-function connect_circles_to_tube(circles::AbstractVector{X}) where {Dim, T, X<: Union{ColoredMesh{Dim, T}, SimpleMesh{Dim, T}}}
+function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) where {T}
 
     # collect all points
-    points::Vector{Point{3, T}} = vcat(map(c -> vertices(c), circles)...)
-    colors = nothing
-    if(X<:ColoredMesh)
-        colors = vcat(map(c -> c.colors, circles)...)
-    end
+    points = reduce(hcat, map(m->m.vertices, circles))
+    colors = vcat(map(c -> c.colors, circles)...)
 
-    connections::Vector{Connectivity} = []
+    resolution = size(circles[1].connections, 1)
+    connections = Array{Integer, 2}(undef, 3, (length(circles)-1)*(2*resolution))
     
     offset = 0
+    connection_i = 1
     prev_indices = nothing
     for c in circles
 
@@ -78,26 +77,22 @@ function connect_circles_to_tube(circles::AbstractVector{X}) where {Dim, T, X<: 
         if(prev_indices !== nothing)
             @assert length(current_indices)==length(prev_indices)
 
-            shift, flip = determine_offset(points[current_indices[1]], points[current_indices[2]], points[prev_indices])
+            shift, flip = determine_offset(points[:, current_indices[1]], points[:, current_indices[2]], points[:, prev_indices])
             prev_indices = circshift(prev_indices, -shift)
             if(flip)
 
                 log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices) # TODO 1c4k has a problem and flip is detected
-                # if(X<:ColoredMesh)
-                #     colors[current_indices] = repeat([(0, 0, 255)], length(current_indices))
-                # end
+                colors[current_indices] = repeat([(0, 150, 0)], length(current_indices))
                 reverse!(prev_indices)
             end
-            for i in eachindex(current_indices)
-                if(i==1)
-                    a = connect((current_indices[i], prev_indices[i], prev_indices[end]))
-                    b = connect((current_indices[i], prev_indices[end], current_indices[end]))
-                else
-                    a = connect((current_indices[i], prev_indices[i], prev_indices[i-1]))
-                    b = connect((current_indices[i], prev_indices[i-1], current_indices[i-1]))
-                end
-                push!(connections, a, b)
-            end
+
+            m1 = reduce(hcat, collect(t) for t in zip(current_indices, prev_indices, circshift(prev_indices, 1)))
+            connections[:, connection_i:connection_i+resolution-1] = m1
+            connection_i += resolution
+
+            m2 = reduce(hcat, collect(t) for t in zip(current_indices, circshift(prev_indices, 1), circshift(current_indices, 1)))
+            connections[:, connection_i:connection_i+resolution-1] = m2
+            connection_i += resolution
         end
 
         prev_indices = current_indices
@@ -106,28 +101,27 @@ function connect_circles_to_tube(circles::AbstractVector{X}) where {Dim, T, X<: 
 
     log_info(types, "Type of points in connect_tube: ", typeof(points))
 
-    if(colors===nothing)
-        return SimpleMesh(points, connections)
-    else
-        return ColoredMesh(SimpleMesh(points, connections), colors)
-    end
+    
+    return PlainMesh(points, connections, colors)
 end
 
 function determine_offset(p1, p2, circle_points)
-    distances1 = map(cp -> norm(p1-cp), circle_points)
+    # TODO
+
+    distances1 = map(cp -> norm(p1 .- cp), eachcol(circle_points))
     nearest1 = argmin(distances1)
 
-    distances2 = map(cp -> norm(p2-cp), circle_points)
+    distances2 = map(cp -> norm(p2 .- cp), eachcol(circle_points))
     distances2[nearest1] = max(distances2...)+1
     nearest2 = argmin(distances2)
 
     a = nearest2-nearest1
     while a<=0
-        a += length(circle_points)
+        a += size(circle_points, 2)
     end
 
     
-    if(a>length(circle_points)/2)
+    if(a>size(circle_points, 2)/2)
 
         log_info(circle_index_correction, nearest1, " ", nearest2)
         return nearest1-1, true

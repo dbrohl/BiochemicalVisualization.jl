@@ -18,38 +18,16 @@ struct Representation{T <: Real}
     end
 end
 
-function Representation(mesh::Union{SimpleMesh{Dim, T}, ColoredMesh{Dim, T}}) where {Dim, T}
+function Representation(mesh::PlainMesh{T}) where {T}
 
-    num_point_coords = length(mesh.vertices) * 3
-    points = Array{T}(undef, num_point_coords)
-    colors = Array{String}(undef, length(mesh.vertices))
+    return Representation{T}(
+        vertices=vec(mesh.vertices), 
+        connections=vec(mesh.connections) .- 1, 
+        colors=Dict([("mesh", ["#"*hex(RGB((c ./ 255)...)) for c in mesh.colors])]))
 
-    for i = 1:length(mesh.vertices)
-        points[3*(i-1)+1] = mesh.vertices[i].coords[1]
-        points[3*(i-1)+2] = mesh.vertices[i].coords[2]
-        points[3*(i-1)+3] = mesh.vertices[i].coords[3]
-
-        if(typeof(mesh)<:ColoredMesh)
-            colors[i] = "#"*hex(RGB((mesh.colors[i] ./ 255)...))
-        else
-            colors[i] = "#0000ff"
-        end
-        
-    end
-
-    num_connects = nelements(topology(mesh)) * 3
-    connections = Array{Int64}(undef, num_connects)  
-    a = 0
-    for f in elements(topology(mesh))
-        @assert length(f.indices)==3
-        for i=1:3
-            connections[a+i] = convert(Int64, f.indices[i]-1)
-        end
-        a+=3
-    end
-
-    return Representation{T}(vertices=points, connections=connections, colors=Dict([("mesh", colors)]))
 end
+
+
 
 MsgPack.msgpack_type(::Type{GeometryBasics.Cylinder3{T}})      where {T} = MsgPack.StructType()
 MsgPack.msgpack_type(::Type{GeometryBasics.Sphere{T}})         where {T} = MsgPack.StructType()

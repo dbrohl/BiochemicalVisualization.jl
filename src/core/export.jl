@@ -4,6 +4,8 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
     @assert length(representation.vertices)%3 == 0
 
     colors = first(representation.colors).second
+    println(typeof(representation.vertices), " ", size(representation.vertices))
+    println(typeof(colors), " ", length(colors))
     @assert length(representation.vertices) == length(colors)*3
 
     stream = open(path, "w")

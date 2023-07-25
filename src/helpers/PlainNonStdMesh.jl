@@ -27,20 +27,4 @@ function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
     PlainNonStdMesh(mesh, (0, 0, 255))
 end
 
-function PlainNonStdMesh(mesh::ColoredMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
-    PlainNonStdMesh(convert(SimpleMesh, mesh), mesh.colors)
-end
-
-
-# function merge(m1::ColoredMesh, m2::ColoredMesh)
-#     merged_mesh = Base.merge(convert(SimpleMesh, m1), convert(SimpleMesh, m2))
-#     merged_colors = [m1.colors; m2.colors]
-#     ColoredMesh(merged_mesh, merged_colors)
-# end
-
-# function vertices(m::PlainNonStdMesh)
-#     m.vertices
-# end
-
 nvertices(m::PlainNonStdMesh) = size(m.vertices, 2)
-# Base.convert(::Type{<:SimpleMesh}, m::ColoredMesh) = SimpleMesh(m.vertices, m.topology)

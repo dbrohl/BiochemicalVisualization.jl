@@ -205,8 +205,7 @@ ball_and_stick(ac) = display_model(ac; type="BALL_AND_STICK")
 stick(ac)          = display_model(ac; type="STICK")
 van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 function backbone(ac)
-	representation = prepare_backbone_model(ac, resolution = 30)
+	representation = prepare_backbone_model(ac, resolution = 15)
 	#@benchmark prepare_backbone_model($ac, resolution = 15) seconds=120
-	# @benchmark export_mesh_representation_to_ply("BALL_export_backbone.ply", $representation) seconds=120
 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
 end 

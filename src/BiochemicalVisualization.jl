@@ -21,7 +21,6 @@ asset_path(parts...) = normpath(joinpath(@__DIR__, "..", "assets", parts...))
 export asset_path
 
 include("helpers/Logger.jl")
-include("helpers/ColoredMesh.jl")
 include("helpers/PlainMesh.jl")
 include("helpers/PlainNonStdMesh.jl")
 include("helpers/MeshHelpers.jl")

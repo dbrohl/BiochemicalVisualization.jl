@@ -1,5 +1,3 @@
-export rotate_in_direction!
-
 # Takes a 2D mesh and adds a z-coordinate of 0 to each point
 function lift_into_3d(mesh::SimpleMesh)
     vertices_3d = map(v -> Point(v.coords..., 0), mesh.vertices)

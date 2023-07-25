@@ -1,5 +1,3 @@
-export CatmullRom
-
 struct CatmullRom
     controlPoints::AbstractMatrix # 3 rows, n cols
 

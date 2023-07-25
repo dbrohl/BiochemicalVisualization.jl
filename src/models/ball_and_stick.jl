@@ -19,7 +19,9 @@ function prepare_ball_and_stick_model(
     cylinder_colors = collect(Iterators.flatten(
         map(s -> (element_color_web(s[1].element), element_color_web(s[2].element)), sticks)))
 
-    result = Representation{T}(vcat(spheres, cylinders), vcat(sphere_colors, cylinder_colors))
+    result = Representation{T}(
+        primitives=Dict([("spheres", spheres), ("cylinders", cylinders)]), 
+        colors=Dict([("spheres", sphere_colors), ("cylinders", cylinder_colors)]))
     
     log_info(time_info, "Generated ball&stick representation in $((now()-start_time).value/1000) seconds. ")
     return result

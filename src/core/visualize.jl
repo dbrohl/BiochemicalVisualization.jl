@@ -201,9 +201,13 @@ function display_model(ac::Union{AbstractAtomContainer, Observable{<:AbstractAto
 
 end
 
+# The following three methods do not work anymore since the Representation was changed. 
+# This will be fixed when merging this code with Pascal's frontend/Javascript contribution. 
 ball_and_stick(ac) = display_model(ac; type="BALL_AND_STICK")
 stick(ac)          = display_model(ac; type="STICK")
 van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
+
+
 function backbone(ac)
 	representation = prepare_backbone_model(ac, resolution = 15)
 	#@benchmark prepare_backbone_model($ac, resolution = 15) seconds=120

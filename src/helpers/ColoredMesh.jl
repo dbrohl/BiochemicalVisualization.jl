@@ -1,17 +1,17 @@
 struct ColoredMesh{Dim,T,V<:AbstractVector{Point{Dim,T}},TP<:Topology} <: Mesh{Dim,T}
     vertices::V
     topology::TP
-    colors::Vector{Tuple{Int64, Int64, Int64}}
+    colors::Vector{NTuple{3, Int}}
 end
 
-function ColoredMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, W}}) where {Dim, T, V, TP, W <: Integer}
+function ColoredMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
     if(length(colors)!=length(mesh.vertices))
         return error("Different numbers of vertices and colors")
     end
     ColoredMesh{Dim, T, V, TP}(mesh.vertices, mesh.topology, colors)
 end
 
-function ColoredMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, W}) where {Dim, T, V, TP, W <: Integer}
+function ColoredMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
     ColoredMesh{Dim, T, V, TP}(mesh.vertices, mesh.topology, repeat([color], length(mesh.vertices)))
 end
 

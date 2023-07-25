@@ -19,11 +19,15 @@ struct Representation{T <: Real}
 end
 
 function Representation(mesh::PlainMesh{T}) where {T}
+    p = vec(mesh.vertices)
+    c = vec(mesh.connections) .- 1
+
+    colors = ["#"*hex(RGB((c ./ 255)...)) for c in mesh.colors]
 
     return Representation{T}(
-        vertices=vec(mesh.vertices), 
-        connections=vec(mesh.connections) .- 1, 
-        colors=Dict([("mesh", ["#"*hex(RGB((c ./ 255)...)) for c in mesh.colors])]))
+        vertices=p, 
+        connections=c, 
+        colors=Dict([("mesh", colors)]))
 
 end
 

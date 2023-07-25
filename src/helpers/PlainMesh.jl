@@ -1,17 +1,17 @@
 mutable struct PlainMesh{T}
     vertices::AbstractMatrix{T} # 3 rows, n cols
-    connections::AbstractMatrix{Integer} # 3 rows, m cols, represents triangles
-    colors::Vector{Tuple{Int64, Int64, Int64}}
+    connections::AbstractMatrix{Int} # 3 rows, m cols, represents triangles
+    colors::Vector{NTuple{3, Int}}
 end
 
 
 
-function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, W}}) where {Dim, T, V, TP, W <: Integer}
+function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
     @assert length(colors)==length(mesh.vertices)
 
-    vertices = reduce(hcat, [collect(v.coords.coords) for v in mesh.vertices])
+    vertices = hcat([collect(v.coords.coords) for v in mesh.vertices]...)
 
-    connects = Array{Int64, 2}(undef, 3, nelements(topology(mesh)))
+    connects = Array{Int, 2}(undef, 3, nelements(topology(mesh)))
 
     for (i, f) in enumerate(elements(topology(mesh)))
         @assert length(f.indices)==3
@@ -21,15 +21,15 @@ function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTupl
     PlainMesh{T}(vertices, connects, colors)
 end
 
-function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, W}) where {Dim, T, V, TP, W <: Integer}
+function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
     PlainMesh(mesh, repeat([color], size(mesh.vertices, 1)))
 end
 
-function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP, W <: Integer}
+function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
     PlainMesh(mesh, (0, 0, 255))
 end
 
-function PlainMesh(mesh::ColoredMesh{Dim, T, V, TP}) where {Dim, T, V, TP, W <: Integer}
+function PlainMesh(mesh::ColoredMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
     PlainMesh(convert(SimpleMesh, mesh), mesh.colors)
 end
 
@@ -45,5 +45,6 @@ end
 #     m.vertices
 # end
 
-nvertices(m::ColoredMesh) = size(m.vertices, 2)
+nvertices(m::PlainMesh) = size(m.vertices, 2)
+nconnections(m::PlainMesh) = size(m.connections, 2)
 # Base.convert(::Type{<:SimpleMesh}, m::ColoredMesh) = SimpleMesh(m.vertices, m.topology)

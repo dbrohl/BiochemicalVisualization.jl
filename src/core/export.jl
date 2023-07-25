@@ -4,8 +4,6 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
     @assert length(representation.vertices)%3 == 0
 
     colors = first(representation.colors).second
-    println(typeof(representation.vertices), " ", size(representation.vertices))
-    println(typeof(colors), " ", length(colors))
     @assert length(representation.vertices) == length(colors)*3
 
     stream = open(path, "w")
@@ -31,9 +29,9 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
         x = representation.vertices[(i-1)*3 + 1]
         y = representation.vertices[(i-1)*3 + 2]
         z = representation.vertices[(i-1)*3 + 3]
-        r = parse(Int64, colors[i][2:3], base=16)
-        g = parse(Int64, colors[i][4:5], base=16)
-        b = parse(Int64, colors[i][6:7], base=16)
+        r = parse(Int, colors[i][2:3], base=16)
+        g = parse(Int, colors[i][4:5], base=16)
+        b = parse(Int, colors[i][6:7], base=16)
         println(stream, "$x $y $z $r $g $b")
     end
 

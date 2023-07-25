@@ -9,18 +9,28 @@ struct CatmullRom
     end
 end
 
-# Code adapted from https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline#Code_example_in_Python
+# Code adapted from https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline#Code_example_in_Python (Last access: 24.07.2023)
 function (spline::CatmullRom)(resolution)
-    result = Matrix(undef, 3, 0)
-    i=1
-    while i+3 <= size(spline.controlPoints, 2) # loop over quadruple of controlPoints
-        result = result[:, 1:end-1] # no duplicate points
-
+    num_points = []
+    i = 1
+    while i+3 <= size(spline.controlPoints, 2)
         distance = norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
-        num_points = max(2, convert(Int64, ceil(resolution * 2 * distance)))
-        points = compute_quadruple((spline.controlPoints[:, i], spline.controlPoints[:, i+1], spline.controlPoints[:, i+2], spline.controlPoints[:, i+3]), num_points)
-        result = [result points]
-        i+=1
+        push!(num_points, max(2, convert(Int, ceil(resolution * 2 * distance))))
+        i += 1
+    end
+
+    result = Matrix(undef, 3, sum(num_points)-length(num_points)+1)
+
+    i = 1
+    a = 1
+    while i+3 <= size(spline.controlPoints, 2) # loop over quadruple of controlPoints
+        
+        points = compute_quadruple((spline.controlPoints[:, i], spline.controlPoints[:, i+1], spline.controlPoints[:, i+2], spline.controlPoints[:, i+3]), num_points[i])
+        result[:, a:a+num_points[i]-1] = points
+
+        a += num_points[i]-1
+        i += 1
+        
     end
     return result
 end

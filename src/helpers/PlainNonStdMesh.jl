@@ -1,17 +1,16 @@
-export PlainNonStdMesh
 mutable struct PlainNonStdMesh{T}
     vertices::AbstractMatrix{T} # 3 rows, n cols
-    connections::Vector{Vector{Integer}} # (supports m-gons instead of only triangles)
-    colors::Vector{Tuple{Int64, Int64, Int64}}
+    connections::Vector{Vector{Int}} # (supports m-gons instead of only triangles)
+    colors::Vector{NTuple{3, Int}}
 end
 
 
-function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, W}}) where {Dim, T, V, TP, W <: Integer}
+function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
     @assert length(colors)==length(mesh.vertices)
 
-    vertices = reduce(hcat, [collect(v.coords.coords) for v in mesh.vertices])
+    vertices = hcat([collect(v.coords.coords) for v in mesh.vertices]...)
 
-    connects::Vector{Vector{Int64}} = []
+    connects::Vector{Vector{Int}} = []
 
     for (i, f) in enumerate(elements(topology(mesh)))
         push!(connects, collect(f.indices))
@@ -20,18 +19,17 @@ function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector
     PlainNonStdMesh{T}(vertices, connects, colors)
 end
 
-function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, W}) where {Dim, T, V, TP, W <: Integer}
+function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
     PlainNonStdMesh(mesh, repeat([color], length(mesh.vertices)))
 end
 
-function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP, W <: Integer}
+function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
     PlainNonStdMesh(mesh, (0, 0, 255))
 end
 
-function PlainNonStdMesh(mesh::ColoredMesh{Dim, T, V, TP}) where {Dim, T, V, TP, W <: Integer}
+function PlainNonStdMesh(mesh::ColoredMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
     PlainNonStdMesh(convert(SimpleMesh, mesh), mesh.colors)
 end
-
 
 
 # function merge(m1::ColoredMesh, m2::ColoredMesh)

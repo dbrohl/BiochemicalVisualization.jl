@@ -32,10 +32,10 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where {T}
     num_points = sum(map(m -> size(m.vertices, 2), meshes))
     num_connects = sum(map(m -> size(m.connections, 2), meshes))
 
-    points = reduce(hcat, map(m->m.vertices, meshes))
+    points = hcat(map(m->m.vertices, meshes)...)
 
-    colors = Array{Tuple{Int64, Int64, Int64}}(undef, num_points)
-    connects = Array{Integer, 2}(undef, 3, num_connects)
+    colors = Array{NTuple{3, Int}}(undef, num_points)
+    connects = Array{Int, 2}(undef, 3, num_connects)
 
     point_offset = 0
     connect_offset = 0
@@ -47,8 +47,7 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where {T}
         colors[point_offset+1 : point_offset+point_len] = m.colors
         
 
-        connects[:, connect_offset+1 : connect_offset+connect_len] = m.connections
-        connects[:, connect_offset+1 : connect_offset+connect_len] .+= point_offset
+        connects[:, connect_offset+1 : connect_offset+connect_len] = m.connections .+ point_offset
 
         point_offset += point_len
         connect_offset += connect_len
@@ -61,11 +60,11 @@ end
 function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) where {T}
 
     # collect all points
-    points = reduce(hcat, map(m->m.vertices, circles))
+    points = hcat(map(m->m.vertices, circles)...)
     colors = vcat(map(c -> c.colors, circles)...)
 
     resolution = size(circles[1].connections, 1)
-    connections = Array{Integer, 2}(undef, 3, (length(circles)-1)*(2*resolution))
+    connections = Array{Int, 2}(undef, 3, (length(circles)-1)*(2*resolution))
     
     offset = 0
     connection_i = 1
@@ -78,7 +77,9 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
             @assert length(current_indices)==length(prev_indices)
 
             shift, flip = determine_offset(points[:, current_indices[1]], points[:, current_indices[2]], points[:, prev_indices])
-            prev_indices = circshift(prev_indices, -shift)
+            if(shift!=0)
+                prev_indices = circshift(prev_indices, -shift)
+            end
             if(flip)
 
                 log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices) # TODO 1c4k has a problem and flip is detected
@@ -86,12 +87,14 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
                 reverse!(prev_indices)
             end
 
-            m1 = reduce(hcat, collect(t) for t in zip(current_indices, prev_indices, circshift(prev_indices, 1)))
-            connections[:, connection_i:connection_i+resolution-1] = m1
+            connections[1, connection_i:connection_i+resolution-1] = current_indices'
+            connections[2, connection_i:connection_i+resolution-1] = prev_indices'
+            connections[3, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
             connection_i += resolution
 
-            m2 = reduce(hcat, collect(t) for t in zip(current_indices, circshift(prev_indices, 1), circshift(current_indices, 1)))
-            connections[:, connection_i:connection_i+resolution-1] = m2
+            connections[1, connection_i:connection_i+resolution-1] = current_indices'
+            connections[2, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
+            connections[3, connection_i:connection_i+resolution-1] = circshift(current_indices, 1)'
             connection_i += resolution
         end
 
@@ -106,7 +109,6 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
 end
 
 function determine_offset(p1, p2, circle_points)
-    # TODO
 
     distances1 = map(cp -> norm(p1 .- cp), eachcol(circle_points))
     nearest1 = argmin(distances1)
@@ -115,12 +117,8 @@ function determine_offset(p1, p2, circle_points)
     distances2[nearest1] = max(distances2...)+1
     nearest2 = argmin(distances2)
 
-    a = nearest2-nearest1
-    while a<=0
-        a += size(circle_points, 2)
-    end
-
-    
+    a = mod(nearest2-nearest1, size(circle_points, 2))
+  
     if(a>size(circle_points, 2)/2)
 
         log_info(circle_index_correction, nearest1, " ", nearest2)

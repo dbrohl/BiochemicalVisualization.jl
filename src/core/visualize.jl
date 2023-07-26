@@ -209,7 +209,7 @@ van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 
 
 function backbone(ac)
-	representation = prepare_backbone_model(ac, resolution = 15)
+	representation = prepare_backbone_model(ac, resolution = 30)
 	#@benchmark prepare_backbone_model($ac, resolution = 15) seconds=120
 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
 end 

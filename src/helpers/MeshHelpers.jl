@@ -14,12 +14,14 @@ function translate!(mesh, vec::AbstractArray{T}) where T <: AbstractFloat
 end
 
 # Assumes the object in the origin and rotates it, so that its new local z-axis points to direction. 
-# Returns the new object. 
 function rotate_in_direction!(mesh::Union{PlainMesh, PlainNonStdMesh}, direction::AbstractArray{T}) where T<:AbstractFloat
-    if(direction[2]==0)
-        rotationAxis = Vec(T(0),T(1),T(0))
-    else
+
+    if(direction[1]!=0)
+        rotationAxis = Vec(-direction[2]/direction[1], T(1), T(0)) * -sign(direction[1])
+    elseif(direction[2]!=0)
         rotationAxis = Vec(T(1), -direction[1]/direction[2], T(0)) * sign(direction[2]) # rotation axis is perpendicular to direction and lies in the xy-plane
+    else
+        return
     end
     rotationAngle = Meshes.∠(Vec{3,T}(direction...), Vec(T(0), T(0), T(1)))
     mesh.vertices = (mesh.vertices' * AngleAxis(rotationAngle, rotationAxis...))'
@@ -81,7 +83,7 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
             if(flip)
 
                 log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices) # TODO 1c4k has a problem and flip is detected
-                colors[current_indices] = repeat([(0, 150, 0)], length(current_indices))
+                colors[current_indices] = repeat([FLIP_COLOR], length(current_indices))
                 reverse!(prev_indices)
             end
 

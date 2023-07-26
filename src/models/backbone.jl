@@ -1,4 +1,73 @@
-export prepare_backbone_model
+export rotation_test
+
+
+FLIP_COLOR::NTuple{3, Int} = (200, 200, 200)
+BREAK_COLOR::NTuple{3, Int} = (255, 0, 0)
+COUNT_COLOR_START::NTuple{3, Int} = (255, 0, 255)
+COUNT_COLOR_0::NTuple{3, Int} = (0, 0, 255)
+COUNT_COLOR_1::NTuple{3, Int} = (0, 255, 255)
+BACKGROUND_COLOR::NTuple{3, Int} = (60, 60, 60)
+
+function rotation_test()
+    stick_radius = 0.5
+    resolution=30
+    U = Float64
+
+    circle_prototype = discretize(Sphere(Point(U(0),U(0)), stick_radius), RegularDiscretization(resolution))
+    circle_mesh = PlainNonStdMesh(lift_into_3d(circle_prototype))
+
+    all_points = [circle_mesh.vertices [0;0;0]]
+    all_connects = [(1:resolution)'; circshift(1:resolution, 1)'; repeat([resolution+1], resolution)']
+    all_colors = repeat([(100, 100, 100)], resolution+1)
+    circle_std_mesh = PlainMesh(all_points, all_connects, all_colors)
+
+    all_perm_meshes::Vector{PlainMesh{U}} = []
+    permutations = [[1, 2, 3],
+    [1, 3, 2],
+    [2, 1, 3],
+    [2, 3, 1],
+    [3, 1, 2],
+    [3, 2, 1]]
+
+    for (height, perm) in enumerate(permutations)
+
+        res = 16
+        r = collect(range(0, 2*π, length=res+1))[1:end-1]
+        directions = Matrix{U}(undef, 3, 0)
+        colors = []
+
+        for (i, z_angle) in enumerate(r)
+            layer_radius = cos(z_angle)
+            z = sin(z_angle)
+
+            for (j, xy_angle) in enumerate(r)
+                x = cos(xy_angle) * layer_radius
+                y = sin(xy_angle) * layer_radius
+                directions = [directions [x; y; z][perm]]
+                push!(colors, convert.(Int, floor.(((x, y, z) .+ 1).*128)))
+            end
+        end
+        size = 5
+
+        finished_circles = [circle_std_mesh]
+
+        for (i, (dir, color)) in enumerate(zip(eachcol(directions), colors))
+            circle = deepcopy(circle_std_mesh)
+            rotate_in_direction!(circle, [dir[1]; dir[2]; dir[3]])
+            translate!(circle, [dir[1]; dir[2]; dir[3]] .* size)
+
+            color!(circle, color)
+            push!(finished_circles, circle)
+        end
+        temp = merge_multiple_meshes(finished_circles)
+        translate!(temp, [0.0; 0; 12*(height-1)])
+        push!(all_perm_meshes, temp)
+
+    end
+
+    export_mesh_representation_to_ply("rotation_test.ply", Representation(merge_multiple_meshes(all_perm_meshes)))
+end
+
 function prepare_backbone_model(
     ac::AbstractAtomContainer{T}; 
     stick_radius=T(0.2), resolution=30) where {T<:Real}
@@ -49,7 +118,9 @@ function prepare_backbone_model(
         log_info(types, "Type of spline points: ", typeof(spline_points))
 
         circles::Vector{PlainNonStdMesh{U}} = []
-        for i=2:size(spline_points, 2)-2
+        warncounter = 0
+        count_bits::Vector{Bool} = []
+        for i=2:size(spline_points, 2)-2 # start- and endcap bases are the first and last splinepoints
             normal = spline_points[:, i+1] .- spline_points[:, i]
             normal_length = norm(normal)
 
@@ -61,8 +132,42 @@ function prepare_backbone_model(
             circle = deepcopy(circle_mesh)
             rotate_in_direction!(circle, normal)
             translate!(circle, spline_points[:, i])
-            color!(circle, in(i%100, [0,1]) ? (255, 0,0) : chain_colors[chain_num])
+
+            distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
+            distance_to_current_center = min([norm(spline_points[:, i] - a) for a in eachcol(circle.vertices)]...)
+
+            if(distance_to_previous_center< distance_to_current_center)
+                warncounter = 20
+                println("Possible broken mesh, chain $chain_num spline_point $i")
+            end
+
+            if(i%100==0) 
+                count_bits = []
+                num::Int32 = i÷100
+                while(num!=0)
+                    push!(count_bits, convert(Bool, num & 0x00000001))
+                    num = num >> 1
+                end
+                color!(circle, COUNT_COLOR_START)
+            else
+
+
+                if(warncounter>0)
+                    color!(circle, BREAK_COLOR)
+                    warncounter -= 1
+                else
+                    if(length(count_bits)!=0)
+                        val = pop!(count_bits)
+                        color!(circle, val ? COUNT_COLOR_1 : COUNT_COLOR_0)
+                    else
+
+                        # color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
+                        color!(circle, BACKGROUND_COLOR)
+                    end
+                end
+            end
             push!(circles, circle)
+
         end
 
         spline_mesh = connect_circles_to_tube(circles)

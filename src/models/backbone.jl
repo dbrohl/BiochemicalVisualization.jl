@@ -1,4 +1,4 @@
-export rotation_test
+export rotation_test, prepare_backbone_model
 
 
 FLIP_COLOR::NTuple{3, Int} = (200, 200, 200)
@@ -68,6 +68,23 @@ function rotation_test()
     export_mesh_representation_to_ply("rotation_test.ply", Representation(merge_multiple_meshes(all_perm_meshes)))
 end
 
+function circlesToSimpleMesh(circles)
+    verts = hcat(map(c->c.vertices, circles)...)
+    verts = [Point3(p...) for p in eachcol(verts)]
+
+    i=0
+    connects::Vector{Connectivity} = []
+    for c in circles
+        for connection in c.connections
+            push!(connects, connect(Tuple(connection .+ i)))
+        end
+        i+=size(c.vertices, 2)
+    end
+
+    return SimpleMesh(verts, connects)
+
+end
+
 function prepare_backbone_model(
     ac::AbstractAtomContainer{T}; 
     stick_radius=T(0.2), resolution=30) where {T<:Real}
@@ -98,13 +115,8 @@ function prepare_backbone_model(
         # sphere_mesh = simplexify(Sphere{3, U}((0,0,0), sphere_radius))
 
         # spheres = map(a -> Translate(U.(a.r)...)((sphere_mesh)), c_alphas)
-
-        # sphere_colors = [element_color_rgb(a.element) for a in c_alphas]
-        # sphere_meshes = map(zip(spheres, sphere_colors)) do (s,c)
-        #     ColoredMesh(s, c)
-        # end
-        # m1 = reduce(merge, sphere_meshes)
-        # return 0, m1
+        # m1 = reduce(merge, spheres)
+        # export_mesh_to_ply("c-alpha.ply", m1)
 
 
 
@@ -112,10 +124,13 @@ function prepare_backbone_model(
         # real backbone
 
         c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
-
         
         spline_points::AbstractMatrix{T} =  c_alpha_spline(vertices_per_unit)
         log_info(types, "Type of spline points: ", typeof(spline_points))
+
+        # verts = [Point3(x...) for x in eachcol(spline_points)]
+        # connects = [connect((a, b)) for (a, b) in zip(1:length(verts)-1, 2:length(verts))]
+        # export_mesh_to_ply("spline.ply", SimpleMesh(verts, connects))
 
         circles::Vector{PlainNonStdMesh{U}} = []
         warncounter = 0
@@ -138,7 +153,7 @@ function prepare_backbone_model(
 
             if(distance_to_previous_center< distance_to_current_center)
                 warncounter = 20
-                println("Possible broken mesh, chain $chain_num spline_point $i")
+                log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $i")
             end
 
             if(i%100==0) 
@@ -169,6 +184,9 @@ function prepare_backbone_model(
             push!(circles, circle)
 
         end
+
+        # m1 = circlesToSimpleMesh(circles)
+        # export_mesh_to_ply("circles.ply", m1)
 
         spline_mesh = connect_circles_to_tube(circles)
 

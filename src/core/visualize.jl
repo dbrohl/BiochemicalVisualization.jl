@@ -2,7 +2,7 @@ export
 ball_and_stick, 
 stick, 
 van_der_waals,
-backbone
+backbone, backbone_gpu
 
 const VISUALIZE = ES6Module(asset_path("visualize_structure.js"))::Asset
 
@@ -210,6 +210,10 @@ van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 
 function backbone(ac)
 	representation = prepare_backbone_model(ac, resolution = 12)
-	#@benchmark prepare_backbone_model($ac, resolution = 15) seconds=120
+	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
+end 
+
+function backbone_gpu(ac)
+	representation = prepare_backbone_model_gpu(ac, resolution = 12)
 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
 end 

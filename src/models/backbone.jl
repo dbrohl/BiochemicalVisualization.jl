@@ -127,6 +127,7 @@ function prepare_backbone_model(
         
         spline_points::AbstractMatrix{T} =  c_alpha_spline(vertices_per_unit)
         log_info(types, "Type of spline points: ", typeof(spline_points))
+        #println("#splinepoints", size(spline_points, 2))
 
         # verts = [Point3(x...) for x in eachcol(spline_points)]
         # connects = [connect((a, b)) for (a, b) in zip(1:length(verts)-1, 2:length(verts))]
@@ -148,39 +149,41 @@ function prepare_backbone_model(
             rotate_in_direction!(circle, normal)
             translate!(circle, spline_points[:, i])
 
-            distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
-            distance_to_current_center = min([norm(spline_points[:, i] - a) for a in eachcol(circle.vertices)]...)
+            # distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
+            # distance_to_current_center = min([norm(spline_points[:, i] - a) for a in eachcol(circle.vertices)]...)
 
-            if(distance_to_previous_center< distance_to_current_center)
-                warncounter = 20
-                log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $i")
-            end
+            # if(distance_to_previous_center< distance_to_current_center)
+            #     warncounter = 20
+            #     log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $i")
+            # end
 
-            if(i%100==0) 
-                count_bits = []
-                num::Int32 = i÷100
-                while(num!=0)
-                    push!(count_bits, convert(Bool, num & 0x00000001))
-                    num = num >> 1
-                end
-                color!(circle, COUNT_COLOR_START)
-            else
+            # if(i%100==0) 
+            #     count_bits = []
+            #     num::Int32 = i÷100
+            #     while(num!=0)
+            #         push!(count_bits, convert(Bool, num & 0x00000001))
+            #         num = num >> 1
+            #     end
+            #     color!(circle, COUNT_COLOR_START)
+            # else
 
 
-                if(warncounter>0)
-                    color!(circle, BREAK_COLOR)
-                    warncounter -= 1
-                else
-                    if(length(count_bits)!=0)
-                        val = pop!(count_bits)
-                        color!(circle, val ? COUNT_COLOR_1 : COUNT_COLOR_0)
-                    else
+            #     if(warncounter>0)
+            #         color!(circle, BREAK_COLOR)
+            #         warncounter -= 1
+            #     else
+            #         if(length(count_bits)!=0)
+            #             val = pop!(count_bits)
+            #             color!(circle, val ? COUNT_COLOR_1 : COUNT_COLOR_0)
+            #         else
 
-                        # color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
-                        color!(circle, BACKGROUND_COLOR)
-                    end
-                end
-            end
+            #             # color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
+            #             color!(circle, BACKGROUND_COLOR)
+            #         end
+            #     end
+            # end
+            color!(circle, chain_colors[chain_num])
+
             push!(circles, circle)
 
         end
@@ -202,10 +205,10 @@ function prepare_backbone_model(
         rotate_in_direction!(end_cap, -(spline_points[:, end-1]-spline_points[:, end]))
         translate!(end_cap, spline_points[:, end-1])
 
-        # color!(start_cap, chain_colors[chain_num])
-        # color!(end_cap, chain_colors[chain_num])
-        color!(start_cap, (0, 255, 0))
-        color!(end_cap, (0, 0, 255))
+        color!(start_cap, chain_colors[chain_num])
+        color!(end_cap, chain_colors[chain_num])
+        # color!(start_cap, (0, 255, 0))
+        # color!(end_cap, (0, 0, 255))
 
         log_info(types, "Typeof shifted cap: ", typeof(start_cap), " ", typeof(end_cap))
 

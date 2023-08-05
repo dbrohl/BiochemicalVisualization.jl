@@ -1,6 +1,6 @@
-@enum Part types circle_index_correction time_info damaged_mesh
+@enum Part types circle_index_correction time_info damaged_mesh gpu
 
-printed_parts = [] #time_info, circle_index_correction
+printed_parts = [gpu, time_info, types] #time_info, circle_index_correction
 
 function log_info(part::Part, args...)
     if(part ∈ printed_parts)

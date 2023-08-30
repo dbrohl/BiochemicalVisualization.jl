@@ -1,3 +1,4 @@
+export create_circle_in_local_frame, local_frame_mesh
 # Takes a 2D mesh and adds a z-coordinate of 0 to each point
 function lift_into_3d(mesh::SimpleMesh)
     vertices_3d = map(v -> Point(v.coords..., 0), mesh.vertices)
@@ -26,6 +27,26 @@ function rotate_in_direction!(mesh::Union{PlainMesh, PlainNonStdMesh}, direction
     rotationAngle = Meshes.∠(Vec{3,T}(direction...), Vec(T(0), T(0), T(1)))
     mesh.vertices = (mesh.vertices' * AngleAxis(rotationAngle, rotationAxis...))'
 end
+
+function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T<:AbstractFloat
+    points = Matrix{T}(undef, 3, resolution)
+
+    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
+        points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
+    end
+    return points
+end
+
+function local_frame_mesh(local_zero, local_x, local_y, local_z)
+    x = ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(local_zero), Tuple(local_zero + local_x)])), RegularDiscretization(6)), (255, 0, 0))
+    y = ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(local_zero), Tuple(local_zero + local_y)])), RegularDiscretization(6)), (0, 255, 0))
+    z = ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(local_zero), Tuple(local_zero + local_z)])), RegularDiscretization(6)), (0, 0, 255))
+
+    a = merge(x, y)
+    return merge(a, z)
+end
+
+        
 
 # Merges multiple mesh objects into one. The geometry (vertices/edges/faces) does not change. 
 function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where {T}
@@ -59,11 +80,13 @@ end
 # Adds faces between circles to create the surface of a tube. 
 function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) where {T}
 
+    shiftSum = 0
+
     # collect all points
     points = hcat(map(m->m.vertices, circles)...)
     colors = vcat(map(c -> c.colors, circles)...)
 
-    resolution = size(circles[1].connections, 1)
+    resolution = size(circles[1].vertices, 2)
     connections = Array{Int, 2}(undef, 3, (length(circles)-1)*(2*resolution))
     
     offset = 0
@@ -79,6 +102,7 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
             shift, flip = determine_offset(points[:, current_indices[1]], points[:, current_indices[2]], points[:, prev_indices])
             if(shift!=0)
                 prev_indices = circshift(prev_indices, -shift)
+                shiftSum += abs(shift)
             end
             if(flip)
 
@@ -103,6 +127,8 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
     end
 
     log_info(types, "Type of points in connect_tube: ", typeof(points))
+
+    log_info(frame_rotation, "Total needed rotation: ", shiftSum)
 
     
     return PlainMesh(points, connections, colors)

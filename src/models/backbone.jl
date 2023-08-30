@@ -98,11 +98,11 @@ function prepare_backbone_model(
     log_info(types, "Types: ", T, " ", U)
 
     vertices_per_unit = resolution / 2*π*stick_radius
-    circle_prototype = discretize(Sphere(Point(U(0),U(0)), stick_radius), RegularDiscretization(resolution))
-    circle_mesh = PlainNonStdMesh(lift_into_3d(circle_prototype))
+    # circle_prototype = discretize(Sphere(Point(U(0),U(0)), stick_radius), RegularDiscretization(resolution))
+    # circle_mesh = PlainNonStdMesh(lift_into_3d(circle_prototype))
     cap_mesh = PlainMesh(Hemisphere(stick_radius, resolution, U))
 
-    log_info(types, "Types of proto meshes: ", typeof(circle_mesh), " ", typeof(cap_mesh))
+    #log_info(types, "Types of proto meshes: ", typeof(circle_mesh), " ", typeof(cap_mesh))
     chain_meshes::Vector{PlainMesh{U}} = []
     chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end])
     for (chain_num, chain) in enumerate(eachchain(ac))
@@ -134,57 +134,83 @@ function prepare_backbone_model(
         # export_mesh_to_ply("spline.ply", SimpleMesh(verts, connects))
 
         circles::Vector{PlainNonStdMesh{U}} = []
+
+        circle_meshes::Vector{PlainMesh{U}} = []
+        frames::Vector{ColoredMesh} = []
+        mesh_edges = Matrix{Int}(undef, 3, resolution)
+        mesh_edges[1, :] = collect(1:resolution)
+        mesh_edges[2, :] = circshift!(collect(1:resolution), -1)
+        mesh_edges[3, :] = repeat([resolution+1], resolution)
+
         warncounter = 0
         count_bits::Vector{Bool} = []
         for i=2:size(spline_points, 2)-2 # start- and endcap bases are the first and last splinepoints
-            normal = spline_points[:, i+1] .- spline_points[:, i]
-            normal_length = norm(normal)
+            tangent = spline_points[:, i+1] .- spline_points[:, i]
+            tangent_length = norm(tangent)
 
-            if(normal_length < 10^-5) 
+            if(tangent_length < 10^-5) 
                 # Duplicate points (in one location) generate a normal vector with length 0, which leads to a wrong orientation of the circle.
                 # (It also would be duplicated and unnecessary)
                 continue
             end
-            circle = deepcopy(circle_mesh)
-            rotate_in_direction!(circle, normal)
-            translate!(circle, spline_points[:, i])
 
-            # distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
-            # distance_to_current_center = min([norm(spline_points[:, i] - a) for a in eachcol(circle.vertices)]...)
+            # construct artificial frame
+            if(abs(tangent[3]) < 10^-5)
+                continue
+            end
+            normal = [1, 2, U(-tangent[1]-2*tangent[2])/tangent[3]]
+            binormal = [U(0), 0, 0]
+            binormal[1] = tangent[2]*normal[3] - tangent[3]*normal[2]
+            binormal[2] = tangent[3]*normal[1] - tangent[1]*normal[3]
+            binormal[3] = tangent[1]*normal[2] - tangent[2]*normal[1]
 
-            # if(distance_to_previous_center< distance_to_current_center)
-            #     warncounter = 20
-            #     log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $i")
-            # end
+            tangent /= norm(tangent)
+            normal /= norm(normal)
+            binormal /= norm(binormal)
 
-            # if(i%100==0) 
-            #     count_bits = []
-            #     num::Int32 = i÷100
-            #     while(num!=0)
-            #         push!(count_bits, convert(Bool, num & 0x00000001))
-            #         num = num >> 1
-            #     end
-            #     color!(circle, COUNT_COLOR_START)
-            # else
+            circle_points = create_circle_in_local_frame(spline_points[:, i], normal, binormal, resolution, stick_radius)
+            circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
+            circle_mesh = PlainMesh([circle_points spline_points[:, i]], mesh_edges, repeat([(255, 255, 255)], resolution+1))
+            frame = local_frame_mesh(spline_points[:, i], tangent, normal, binormal)
+
+            distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
+            distance_to_current_center = min([norm(spline_points[:, i] - a) for a in eachcol(circle.vertices)]...)
+
+            if(distance_to_previous_center< distance_to_current_center)
+                warncounter = 20
+                log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $i")
+            end
+
+            if(i%100==0) 
+                count_bits = []
+                num::Int32 = i÷100
+                while(num!=0)
+                    push!(count_bits, convert(Bool, num & 0x00000001))
+                    num = num >> 1
+                end
+                color!(circle, COUNT_COLOR_START)
+            else
 
 
-            #     if(warncounter>0)
-            #         color!(circle, BREAK_COLOR)
-            #         warncounter -= 1
-            #     else
-            #         if(length(count_bits)!=0)
-            #             val = pop!(count_bits)
-            #             color!(circle, val ? COUNT_COLOR_1 : COUNT_COLOR_0)
-            #         else
+                if(warncounter>0)
+                    color!(circle, BREAK_COLOR)
+                    warncounter -= 1
+                else
+                    if(length(count_bits)!=0)
+                        val = pop!(count_bits)
+                        color!(circle, val ? COUNT_COLOR_1 : COUNT_COLOR_0)
+                    else
 
-            #             # color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
-            #             color!(circle, BACKGROUND_COLOR)
-            #         end
-            #     end
-            # end
+                        # color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
+                        color!(circle, BACKGROUND_COLOR)
+                    end
+                end
+            end
             color!(circle, chain_colors[chain_num])
 
             push!(circles, circle)
+            push!(circle_meshes, circle_mesh)
+            push!(frames, frame)
 
         end
 
@@ -195,86 +221,94 @@ function prepare_backbone_model(
 
         log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
+        # ----- debug export -----
+        cs = merge_multiple_meshes(circle_meshes)
+        export_mesh_representation_to_ply("circles.ply", Representation(cs))
+
+        fs = reduce(merge, frames)
+        export_mesh_to_ply("frames.ply", fs)
+
         # ----- add hemispheres to both ends -----
 
-        # position
-        start_cap = deepcopy(cap_mesh)
-        rotate_in_direction!(start_cap, -(spline_points[:, 2]-spline_points[:, 1]))
-        translate!(start_cap, spline_points[:, 1])
-        end_cap = deepcopy(cap_mesh)
-        rotate_in_direction!(end_cap, -(spline_points[:, end-1]-spline_points[:, end]))
-        translate!(end_cap, spline_points[:, end-1])
+    #     # position
+    #     start_cap = deepcopy(cap_mesh)
+    #     rotate_in_direction!(start_cap, -(spline_points[:, 2]-spline_points[:, 1]))
+    #     translate!(start_cap, spline_points[:, 1])
+    #     end_cap = deepcopy(cap_mesh)
+    #     rotate_in_direction!(end_cap, -(spline_points[:, end-1]-spline_points[:, end]))
+    #     translate!(end_cap, spline_points[:, end-1])
 
-        color!(start_cap, chain_colors[chain_num])
-        color!(end_cap, chain_colors[chain_num])
-        # color!(start_cap, (0, 255, 0))
-        # color!(end_cap, (0, 0, 255))
+    #     color!(start_cap, chain_colors[chain_num])
+    #     color!(end_cap, chain_colors[chain_num])
+    #     # color!(start_cap, (0, 255, 0))
+    #     # color!(end_cap, (0, 0, 255))
 
-        log_info(types, "Typeof shifted cap: ", typeof(start_cap), " ", typeof(end_cap))
+    #     log_info(types, "Typeof shifted cap: ", typeof(start_cap), " ", typeof(end_cap))
 
-        # merge meshes
+    #     # merge meshes
 
-        points = [spline_mesh.vertices start_cap.vertices end_cap.vertices]
-        colors = [spline_mesh.colors; start_cap.colors; end_cap.colors]
+    #     points = [spline_mesh.vertices start_cap.vertices end_cap.vertices]
+    #     colors = [spline_mesh.colors; start_cap.colors; end_cap.colors]
 
-        connections::Matrix{Int} = Matrix(undef, 3, nconnections(spline_mesh) + nconnections(start_cap) + nconnections(end_cap) + 4 * resolution)
+    #     connections::Matrix{Int} = Matrix(undef, 3, nconnections(spline_mesh) + nconnections(start_cap) + nconnections(end_cap) + 4 * resolution)
         
-        position = 1
-        offset = 0
-        connections[:, position : position + nconnections(spline_mesh)-1] = spline_mesh.connections
-        position += nconnections(spline_mesh)
-        offset += nvertices(spline_mesh)
+    #     position = 1
+    #     offset = 0
+    #     connections[:, position : position + nconnections(spline_mesh)-1] = spline_mesh.connections
+    #     position += nconnections(spline_mesh)
+    #     offset += nvertices(spline_mesh)
 
-        connections[:, position : position + nconnections(start_cap)-1] = (start_cap.connections .+ offset)
-        position += nconnections(start_cap)
-        offset += nvertices(start_cap)
+    #     connections[:, position : position + nconnections(start_cap)-1] = (start_cap.connections .+ offset)
+    #     position += nconnections(start_cap)
+    #     offset += nvertices(start_cap)
 
-        connections[:, position : position + nconnections(end_cap)-1] = (end_cap.connections .+ offset)
-        position += nconnections(end_cap)
-        offset += nvertices(end_cap)
+    #     connections[:, position : position + nconnections(end_cap)-1] = (end_cap.connections .+ offset)
+    #     position += nconnections(end_cap)
+    #     offset += nvertices(end_cap)
 
-        # add new connections
+    #     # add new connections
 
-        start_cap_base_indices = nvertices(spline_mesh)+1 : nvertices(spline_mesh)+resolution
-        end_cap_base_indices = nvertices(spline_mesh)+nvertices(start_cap)+1 : nvertices(spline_mesh)+nvertices(start_cap)+resolution
-        first_circle_indices = 1 : resolution
-        last_circle_indices = nvertices(spline_mesh)-resolution+1 : nvertices(spline_mesh)
+    #     start_cap_base_indices = nvertices(spline_mesh)+1 : nvertices(spline_mesh)+resolution
+    #     end_cap_base_indices = nvertices(spline_mesh)+nvertices(start_cap)+1 : nvertices(spline_mesh)+nvertices(start_cap)+resolution
+    #     first_circle_indices = 1 : resolution
+    #     last_circle_indices = nvertices(spline_mesh)-resolution+1 : nvertices(spline_mesh)
 
-        shift, flip = determine_offset(points[:, start_cap_base_indices[1]], points[:, start_cap_base_indices[2]], points[:, first_circle_indices])
-        first_circle_indices = circshift(first_circle_indices, -shift)
-        if(flip)
-            reverse!(first_circle_indices)
-        end
+    #     shift, flip = determine_offset(points[:, start_cap_base_indices[1]], points[:, start_cap_base_indices[2]], points[:, first_circle_indices])
+    #     first_circle_indices = circshift(first_circle_indices, -shift)
+    #     if(flip)
+    #         reverse!(first_circle_indices)
+    #     end
 
-        shift, flip = determine_offset(points[:, end_cap_base_indices[1]], points[:, end_cap_base_indices[2]], points[:, last_circle_indices])
-        end_cap_base_indices = circshift(end_cap_base_indices, -shift)
-        if(flip)
-            reverse!(end_cap_base_indices)
-        end
+    #     shift, flip = determine_offset(points[:, end_cap_base_indices[1]], points[:, end_cap_base_indices[2]], points[:, last_circle_indices])
+    #     end_cap_base_indices = circshift(end_cap_base_indices, -shift)
+    #     if(flip)
+    #         reverse!(end_cap_base_indices)
+    #     end
 
 
-        connections[1, position:position+resolution-1] = start_cap_base_indices'
-        connections[2, position:position+resolution-1] = first_circle_indices'
-        connections[3, position:position+resolution-1] = circshift(first_circle_indices, 1)'
-        position += resolution
+    #     connections[1, position:position+resolution-1] = start_cap_base_indices'
+    #     connections[2, position:position+resolution-1] = first_circle_indices'
+    #     connections[3, position:position+resolution-1] = circshift(first_circle_indices, 1)'
+    #     position += resolution
 
-        connections[1, position:position+resolution-1] = start_cap_base_indices'
-        connections[2, position:position+resolution-1] = circshift(first_circle_indices, 1)'
-        connections[3, position:position+resolution-1] = circshift(start_cap_base_indices, 1)'
-        position += resolution
+    #     connections[1, position:position+resolution-1] = start_cap_base_indices'
+    #     connections[2, position:position+resolution-1] = circshift(first_circle_indices, 1)'
+    #     connections[3, position:position+resolution-1] = circshift(start_cap_base_indices, 1)'
+    #     position += resolution
 
-        connections[1, position:position+resolution-1] = end_cap_base_indices'
-        connections[2, position:position+resolution-1] = last_circle_indices'
-        connections[3, position:position+resolution-1] = circshift(last_circle_indices, 1)'
-        position += resolution
+    #     connections[1, position:position+resolution-1] = end_cap_base_indices'
+    #     connections[2, position:position+resolution-1] = last_circle_indices'
+    #     connections[3, position:position+resolution-1] = circshift(last_circle_indices, 1)'
+    #     position += resolution
 
-        connections[1, position:position+resolution-1] = end_cap_base_indices'
-        connections[2, position:position+resolution-1] = circshift(last_circle_indices, 1)'
-        connections[3, position:position+resolution-1] = circshift(end_cap_base_indices, 1)'
-        position += resolution
+    #     connections[1, position:position+resolution-1] = end_cap_base_indices'
+    #     connections[2, position:position+resolution-1] = circshift(last_circle_indices, 1)'
+    #     connections[3, position:position+resolution-1] = circshift(end_cap_base_indices, 1)'
+    #     position += resolution
         
-        push!(chain_meshes, PlainMesh(points, connections, colors))
-        log_info(types, "Type of capped spline mesh: ", typeof(chain_meshes[end]))
+    #     push!(chain_meshes, PlainMesh(points, connections, colors))
+    #     log_info(types, "Type of capped spline mesh: ", typeof(chain_meshes[end]))
+        push!(chain_meshes, spline_mesh)
     end
     temp = merge_multiple_meshes(chain_meshes)
     result = Representation(temp)

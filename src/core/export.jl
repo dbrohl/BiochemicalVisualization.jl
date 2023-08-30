@@ -1,3 +1,4 @@
+export export_mesh_to_ply
 function export_mesh_representation_to_ply(path::AbstractString, representation::Representation)
 
     @assert isempty(representation.primitives) # Only representations containing a mesh are exported here. 
@@ -44,7 +45,7 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
 end
 
 
-function export_mesh_to_ply(path::AbstractString, mesh::SimpleMesh)
+function export_mesh_to_ply(path::AbstractString, mesh::X) where {X<:Union{SimpleMesh, ColoredMesh}}
 
     the_vertices = collect(mesh.vertices)
     faces = []
@@ -62,14 +63,25 @@ function export_mesh_to_ply(path::AbstractString, mesh::SimpleMesh)
         println(stream, "property float $dim") # TODO könnte auch double sein (4 oder 8 bytes)
     end
 
+    if(typeof(mesh)<:ColoredMesh)
+        for channel in ["red", "green", "blue"]
+            println(stream, "property uchar $channel")
+        end
+    end
 
     println(stream, "element face $(length(faces))")
     println(stream, "property list uchar int vertex_index") # TODO correct datatypes
     println(stream, "end_header")
 
     #Vertex List
-    for v in the_vertices
-        println(stream, "$(v.coords[1]) $(v.coords[2]) $(v.coords[3])")
+    if(typeof(mesh)<:ColoredMesh)
+        for (v, c) in zip(the_vertices, mesh.colors)
+            println(stream, "$(v.coords[1]) $(v.coords[2]) $(v.coords[3]) $(c[1]) $(c[2]) $(c[3])")
+        end
+    else
+        for v in the_vertices
+            println(stream, "$(v.coords[1]) $(v.coords[2]) $(v.coords[3])")
+        end
     end
 
     #Face List

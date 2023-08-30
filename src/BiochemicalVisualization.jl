@@ -45,6 +45,7 @@ end # TODO other backends
 include("helpers/PlainMesh.jl")
 include("helpers/PlainNonStdMesh.jl")
 include("helpers/MeshHelpers.jl")
+include("helpers/gpu_rotation_test.jl")
 
 include("core/representation.jl")
 include("core/visualize.jl")

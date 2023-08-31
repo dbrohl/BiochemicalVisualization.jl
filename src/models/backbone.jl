@@ -125,7 +125,12 @@ function prepare_backbone_model(
 
         c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
         
-        spline_points::AbstractMatrix{T} =  c_alpha_spline(vertices_per_unit)
+        spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T} =  c_alpha_spline(vertices_per_unit)
+        min_vel = minimum(norm, eachcol(velocities))
+        max_vel = maximum(norm, eachcol(velocities))
+        min_acc = minimum(norm, eachcol(accelerations))
+        max_acc = maximum(norm, eachcol(accelerations))
+
         log_info(types, "Type of spline points: ", typeof(spline_points))
         #println("#splinepoints", size(spline_points, 2))
 
@@ -171,8 +176,12 @@ function prepare_backbone_model(
             circle_points = create_circle_in_local_frame(spline_points[:, i], normal, binormal, resolution, stick_radius)
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
             circle_mesh = PlainMesh([circle_points spline_points[:, i]], mesh_edges, repeat([(255, 255, 255)], resolution+1))
-            frame = local_frame_mesh(spline_points[:, i], tangent, normal, binormal)
-
+            #frame = local_frame_mesh(spline_points[:, i], tangent, normal, binormal)
+            relative_vel_size = (norm(velocities[:, i])-min_vel)/(max_vel-min_vel)
+            relative_acc_size = (norm(accelerations[:, i])-min_acc)/(max_acc-min_acc)
+            #println(relative_vel_size)
+            frame = local_arrow_mesh(spline_points[:, i], velocities[:, i], (255-Int(round(relative_vel_size*255)), 255-Int(round(relative_vel_size*255)), 255))
+            frame = merge(frame, local_arrow_mesh(spline_points[:, i], accelerations[:, i], (255, 255-Int(round(relative_acc_size*255)), 255-Int(round(relative_acc_size*255)))))
             distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
             distance_to_current_center = min([norm(spline_points[:, i] - a) for a in eachcol(circle.vertices)]...)
 
@@ -201,12 +210,12 @@ function prepare_backbone_model(
                         color!(circle, val ? COUNT_COLOR_1 : COUNT_COLOR_0)
                     else
 
-                        # color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
-                        color!(circle, BACKGROUND_COLOR)
+                        color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
+                        # color!(circle, BACKGROUND_COLOR)
                     end
                 end
             end
-            color!(circle, chain_colors[chain_num])
+            #color!(circle, chain_colors[chain_num])
 
             push!(circles, circle)
             push!(circle_meshes, circle_mesh)

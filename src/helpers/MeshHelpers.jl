@@ -46,6 +46,12 @@ function local_frame_mesh(local_zero, local_x, local_y, local_z)
     return merge(a, z)
 end
 
+function local_arrow_mesh(center, vector, color)
+    return ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(center), Tuple(center + vector)])), RegularDiscretization(6)), color)
+end
+
+
+
         
 
 # Merges multiple mesh objects into one. The geometry (vertices/edges/faces) does not change. 

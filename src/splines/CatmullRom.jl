@@ -33,7 +33,18 @@ function (spline::CatmullRom)(resolution)
         i += 1
         
     end
-    return filter_points(result_points, result_velocities, result_accs)
+
+    # unit_tangents = Matrix(undef, 3, size(result_velocities, 2))
+    # for i=1:size(result_velocities, 2)
+    #     unit_tangents[:, i] = result_velocities[:, i]/norm(result_velocities[:, i])
+    # end
+
+
+    # rs, ss = rmf(result_points, unit_tangents, result_velocities[:, 1]/norm(result_velocities[:, 1]), result_accs[:, 1]/norm(result_accs[:, 1]))
+
+    # return result_points, unit_tangents, rs, ss
+    return result_points, result_velocities, result_accs
+    #return filter_points(result_points, result_velocities, result_accs)
 end
 
 function filter_points(points, velocities, accs)
@@ -61,6 +72,27 @@ function filter_points(points, velocities, accs)
     end
     println("before: $(size(points, 2)) after: $(size(res_points, 2))")
     return res_points, res_vels, res_accs
+end
+
+function rmf(points, ts, r0, s0)
+    rs = Matrix(undef, 3, size(points, 2))
+    ss = Matrix(undef, 3, size(points, 2))
+
+    rs[:, 1] = r0
+    ss[:, 1] = s0
+
+    for i=1:size(points, 2)-1
+        v1 = points[:, i+1] - points[:, i]
+        c1 = dot(v1,v1)
+        r_i_L = rs[:, i] - (2/c1) * dot(v1, rs[:, i]) * v1
+        t_i_L = ts[:, i] - (2/c1) * dot(v1, ts[:, i]) * v1
+        v2 = ts[:, i+1] - t_i_L
+        c2 = dot(v2, v2)
+        rs[:, i+1] = r_i_L - (2/c2) * dot(v2, r_i_L) * v2
+        ss[:, i+1] = cross(ts[:, i+1], rs[:, i+1])
+    end
+    return rs, ss
+
 end
 
 
@@ -105,6 +137,16 @@ function compute_quadruple((P0, P1, P2, P3), num_points)
         B2a = @. -1/(t3-t1)*A2v + -1/(t3-t1)*A2v + (t3-t)/(t3-t1)*A2a + 1/(t3-t1)*A3v + 1/(t3-t1)*A3v + (t-t1)/(t3-t1)*A3a
         Ca  = @. -1/(t2-t1)*B1v + -1/(t2-t1)*B1v + (t2-t)/(t2-t1)*B1a + 1/(t2-t1)*B2v + 1/(t2-t1)*B2v + (t-t1)/(t2-t1)*B2a
 
+
+        # ----- third derivative -----
+        A1j = 0
+        A2j = 0
+        A3j = 0
+
+        B1j = @. -1/(t2-t0)*A1a + -1/(t2-t0)*A1a + -1/(t2-t0)*A1a + (t2-t)/(t2-t0)*A1j + 1/(t2-t0)*A2a + 1/(t2-t0)*A2a + 1/(t2-t0)*A2a + (t-t0)/(t2-t0)*A2j
+        B2j = @. -1/(t3-t1)*A2a + -1/(t3-t1)*A2a + -1/(t3-t1)*A2a + (t3-t)/(t3-t1)*A2j + 1/(t3-t1)*A3a + 1/(t3-t1)*A3a + 1/(t3-t1)*A3a + (t-t1)/(t3-t1)*A3j
+        Cj  = @. -1/(t2-t1)*B1a + -1/(t2-t1)*B1a + (-1)/(t2-t1)*B1a + (t2-t)/(t2-t1)*B1j + 1/(t2-t1)*B2a + 1/(t2-t1)*B2a + 1/(t2-t1)*B2a + (t-t1)/(t2-t1)*B2j
+        
 
         result_points[:, i] = C
         result_velocities[:, i] = Cv

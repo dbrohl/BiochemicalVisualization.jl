@@ -39,11 +39,17 @@ function (spline::CatmullRom)(resolution)
     #     unit_tangents[:, i] = result_velocities[:, i]/norm(result_velocities[:, i])
     # end
 
-
-    # rs, ss = rmf(result_points, unit_tangents, result_velocities[:, 1]/norm(result_velocities[:, 1]), result_accs[:, 1]/norm(result_accs[:, 1]))
+    initial_tangent = result_velocities[:, 1]./norm(result_velocities[:, 1])
+    if(approx_zero(initial_tangent[2]) && approx_zero(initial_tangent[3]))
+        temp = [1; 0; 0]
+    else
+        temp = [0; 1; 0]
+    end
+    initial_r = cross(initial_tangent, temp)
+    ts, rs, ss = rmf(result_points, result_velocities, initial_r, cross(initial_tangent, initial_r))
 
     # return result_points, unit_tangents, rs, ss
-    return result_points, result_velocities, result_accs
+    return result_points, result_velocities, result_accs, (ts, rs, ss)
     #return filter_points(result_points, result_velocities, result_accs)
 end
 
@@ -74,9 +80,15 @@ function filter_points(points, velocities, accs)
     return res_points, res_vels, res_accs
 end
 
-function rmf(points, ts, r0, s0)
+function rmf(points, tangents, r0, s0)
+
+    ts = Matrix(undef, 3, size(points, 2))
     rs = Matrix(undef, 3, size(points, 2))
     ss = Matrix(undef, 3, size(points, 2))
+
+    for (i, col) in enumerate(eachcol(tangents))
+        ts[:, i] = col ./ norm(col)
+    end
 
     rs[:, 1] = r0
     ss[:, 1] = s0
@@ -91,7 +103,7 @@ function rmf(points, ts, r0, s0)
         rs[:, i+1] = r_i_L - (2/c2) * dot(v2, r_i_L) * v2
         ss[:, i+1] = cross(ts[:, i+1], rs[:, i+1])
     end
-    return rs, ss
+    return ts, rs, ss
 
 end
 

@@ -47,6 +47,7 @@ include("helpers/PlainNonStdMesh.jl")
 include("helpers/ColoredMesh.jl")
 include("helpers/MeshHelpers.jl")
 include("helpers/gpu_rotation_test.jl")
+include("helpers/utils.jl")
 
 include("core/representation.jl")
 include("core/visualize.jl")

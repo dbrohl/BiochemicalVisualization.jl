@@ -38,9 +38,9 @@ function create_circle_in_local_frame(center::AbstractArray{T}, local_y::Abstrac
 end
 
 function local_frame_mesh(local_zero, local_x, local_y, local_z)
-    x = ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(local_zero), Tuple(local_zero + local_x)])), RegularDiscretization(6)), (255, 0, 0))
-    y = ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(local_zero), Tuple(local_zero + local_y)])), RegularDiscretization(6)), (0, 255, 0))
-    z = ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(local_zero), Tuple(local_zero + local_z)])), RegularDiscretization(6)), (0, 0, 255))
+    x = ColoredMesh(discretize(CylinderSurface(0.01, Segment(Point(local_zero...), Point((local_zero + local_x)...))), RegularDiscretization(6)), (255, 0, 0))
+    y = ColoredMesh(discretize(CylinderSurface(0.01, Segment(Point(local_zero...), Point((local_zero + local_y)...))), RegularDiscretization(6)), (0, 255, 0))
+    z = ColoredMesh(discretize(CylinderSurface(0.01, Segment(Point(local_zero...), Point((local_zero + local_z)...))), RegularDiscretization(6)), (0, 0, 255))
 
     a = merge(x, y)
     return merge(a, z)

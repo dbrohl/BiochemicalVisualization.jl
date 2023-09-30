@@ -35,10 +35,9 @@ function filter_points_threshold(points, tangents)
             continue
         end
 
-
-        angle_between_frames = acos(dot(tangents[:, remaining_indices[end]], tangents[:, i])) #green: acos(dot(normals[:, remaining_indices[end]], normals[:, i]))
-        #log_info(point_filter, i, angle_between_frames/(2*π)*360, normals[:, remaining_indices[end]], normals[:, i], norm(normals[:, remaining_indices[end]]), norm(normals[:, i]))
-        if(abs(angle_between_frames)> 5/360*2*π)
+        dot_prod = dot(tangents[:, remaining_indices[end]], tangents[:, i])
+        if(abs(dot_prod)>1 || abs(acos(dot_prod))> 5/360*2*π) # Numerical issues could lead to a DomainError when the dot_product is slightly larger than 1. 
+            #log_info(point_filter, i, acos(dot_prod))
             push!(remaining_indices, i)
         end
     end

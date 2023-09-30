@@ -23,7 +23,7 @@ function (spline::CatmullRom)(resolution)
 
     i = 1
     a = 1
-    while i+3 <= size(spline.controlPoints, 2) # loop over quadruple of controlPoints
+    while i+3 <= size(spline.controlPoints, 2) # loop over quadruples of controlPoints
         
         points, velocities, accs = compute_quadruple((spline.controlPoints[:, i], spline.controlPoints[:, i+1], spline.controlPoints[:, i+2], spline.controlPoints[:, i+3]), num_points[i])
         result_points[:, a:a+num_points[i]-1] = points
@@ -34,24 +34,13 @@ function (spline::CatmullRom)(resolution)
         
     end
 
-    initial_tangent = result_velocities[:, 1]./norm(result_velocities[:, 1])
-    if(approx_zero(initial_tangent[2]) && approx_zero(initial_tangent[3]))
-        temp = [1; 0; 0]
-    else
-        temp = [0; 1; 0]
-    end
-    initial_r = cross(initial_tangent, temp)
-    initial_r = initial_r ./ norm(initial_r)
-    ts, rs, ss = rmf(result_points, result_velocities, initial_r, cross(initial_tangent, initial_r))
-
-    return result_points, result_velocities, result_accs, (ts, rs, ss)
+    return result_points, result_velocities, result_accs
 end
 
 
 
 # based on W. Wang, B. Jüttler, D. Zheng, and Y. Liu, ‘Computation of rotation minimizing frames’, doi: 10.1145/1330511.1330513.
-function rmf(points, tangents, r0, s0)
-
+function rmf(points, tangents)
     ts = Matrix(undef, 3, size(points, 2))
     rs = Matrix(undef, 3, size(points, 2))
     ss = Matrix(undef, 3, size(points, 2))
@@ -60,8 +49,15 @@ function rmf(points, tangents, r0, s0)
         ts[:, i] = col ./ norm(col)
     end
 
-    rs[:, 1] = r0
-    ss[:, 1] = s0
+    if(approx_zero(ts[2, 1]) && approx_zero(ts[3, 1]))
+        temp = [1; 0; 0]
+    else
+        temp = [0; 1; 0]
+    end
+    rs[:, 1] = cross(ts[:, 1], temp)
+    rs[:, 1] = rs[:, 1] ./ norm(rs[:, 1])
+
+    ss[:, 1] = cross(ts[:, 1], rs[:, 1])
 
     for i=1:size(points, 2)-1
         v1 = points[:, i+1] - points[:, i]
@@ -75,7 +71,6 @@ function rmf(points, tangents, r0, s0)
         ss[:, i+1] = cross(ts[:, i+1], rs[:, i+1])
     end
     return ts, rs, ss
-
 end
 
 

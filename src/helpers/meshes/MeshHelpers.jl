@@ -37,6 +37,15 @@ function create_circle_in_local_frame(center::AbstractArray{T}, local_y::Abstrac
     return points
 end
 
+function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T<:AbstractFloat
+    points = Matrix{T}(undef, 3, resolution)
+
+    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
+        points[:, i] = center + 2*radius*cos(α)*local_y + radius*sin(α)*local_z
+    end
+    return points
+end
+
 function local_frame_mesh(local_zero, local_x, local_y, local_z)
     x = ColoredMesh(discretize(CylinderSurface(0.01, Segment(Point(local_zero...), Point((local_zero + local_x)...))), RegularDiscretization(6)), (255, 0, 0))
     y = ColoredMesh(discretize(CylinderSurface(0.01, Segment(Point(local_zero...), Point((local_zero + local_y)...))), RegularDiscretization(6)), (0, 255, 0))
@@ -98,6 +107,7 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
     offset = 0
     connection_i = 1
     prev_indices = nothing
+    color_count = 0
     for c in circles
 
         # add connections between circles
@@ -115,6 +125,14 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
                 log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices) # TODO 1c4k has a problem and flip is detected
                 #colors[current_indices] = repeat([FLIP_COLOR], length(current_indices))
                 #reverse!(prev_indices)
+            end
+
+            if(shift!=0 || flip)
+                color_count=10
+            end
+            if(color_count!=0)
+                color_count -= 1
+                colors[current_indices] = repeat([color_count==9 ? BACKGROUND_COLOR : FLIP_COLOR], length(current_indices))
             end
 
             connections[1, connection_i:connection_i+resolution-1] = current_indices'

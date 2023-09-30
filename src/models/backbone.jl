@@ -125,7 +125,8 @@ function prepare_backbone_model(
         # real backbone
         c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
         
-        spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T}, (q::AbstractMatrix{T}, r::AbstractMatrix{T}, s::AbstractMatrix{T}) =  c_alpha_spline(vertices_per_unit)
+        spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T} = c_alpha_spline(vertices_per_unit)
+        q::AbstractMatrix{T}, r::AbstractMatrix{T}, s::AbstractMatrix{T} = rmf(spline_points, velocities)
         filtered_indices = filter_points_threshold(spline_points, q)
         #filtered_indices = no_filter(spline_points)
 
@@ -147,6 +148,7 @@ function prepare_backbone_model(
 
             # generate circle for backbone
             circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
+            #circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
 
             # debug output

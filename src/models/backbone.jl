@@ -126,8 +126,16 @@ function prepare_backbone_model(
         c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
         
         spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T} = c_alpha_spline(vertices_per_unit)
+        for i = axes(velocities, 2)
+            velocities[:, i] = velocities[:, i] ./ norm(velocities[:, i])
+        end
+
+        filtered_indices = filter_points_threshold(spline_points, velocities)
+        spline_points = spline_points[:, filtered_indices]
+        velocities = velocities[:, filtered_indices]
+
         q::AbstractMatrix{T}, r::AbstractMatrix{T}, s::AbstractMatrix{T} = rmf(spline_points, velocities)
-        filtered_indices = filter_points_threshold(spline_points, q)
+        
         #filtered_indices = no_filter(spline_points)
 
         log_info(types, "Type of spline points: ", typeof(spline_points))
@@ -143,8 +151,8 @@ function prepare_backbone_model(
         mesh_edges[3, :] = repeat([resolution+1], resolution)
 
         warncounter = 0
-        for i=1:length(filtered_indices) # start- and endcap bases are the first and last splinepoints #TODO offset wieder auf 2, wenn Endkappen wieder funktionieren
-            current_index = filtered_indices[i]
+        for i=1:size(spline_points, 2) # start- and endcap bases are the first and last splinepoints #TODO offset wieder auf 2, wenn Endkappen wieder funktionieren
+            current_index = i
 
             # generate circle for backbone
             circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
@@ -162,7 +170,7 @@ function prepare_backbone_model(
 
             # Rudimentary problem detection
             if(i>1)
-                distance_to_previous_center = min([norm(spline_points[:, filtered_indices[i-1]] - a) for a in eachcol(circle.vertices)]...)
+                distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
                 distance_to_current_center = min([norm(spline_points[:, current_index] - a) for a in eachcol(circle.vertices)]...)
 
                 if(distance_to_previous_center < distance_to_current_center)

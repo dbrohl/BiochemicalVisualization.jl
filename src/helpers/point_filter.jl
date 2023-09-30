@@ -4,10 +4,10 @@ function no_filter(points)
     return axes(points, 2)
 end
 
+# Smaller lengths of the acceleration vectors correspond to a higher probability that the point gets deleted. 
 function filter_points_stoch(points, accs)
     min_acc = minimum(norm, eachcol(accs))
     max_acc = maximum(norm, eachcol(accs))
-    println(min_acc, " ", max_acc)
 
     remaining_indices = []
     for i=axes(points, 2)
@@ -16,10 +16,33 @@ function filter_points_stoch(points, accs)
 
         r = rand(Float32)
 
-        if(i==1 || i==axes(points, 2) || random_bound>=r)
+        if(i==firstindex(points, 2) || i==lastindex(points, 2) || random_bound>=r)
             push!(remaining_indices, i)
         end
     end
-    println("before: $(size(points, 2)) after: $(len(remaining_indices))")
+    log_info(point_filter, "before: $(size(points, 2)) after: $(length(remaining_indices))")
+    return remaining_indices
+end
+
+# Whenever the angle between the last selected and the current tangent is too large, the current circle is added. 
+# Tangents should be normalized!
+function filter_points_threshold(points, tangents)
+    remaining_indices = []
+    for i=axes(points, 2)
+        if(i==firstindex(points, 2) || i==lastindex(points, 2))
+            println("Found start or end ", i)
+            push!(remaining_indices, i)
+            continue
+        end
+
+
+        angle_between_frames = acos(dot(tangents[:, remaining_indices[end]], tangents[:, i])) #green: acos(dot(normals[:, remaining_indices[end]], normals[:, i]))
+        #log_info(point_filter, i, angle_between_frames/(2*π)*360, normals[:, remaining_indices[end]], normals[:, i], norm(normals[:, remaining_indices[end]]), norm(normals[:, i]))
+        if(abs(angle_between_frames)> 5/360*2*π)
+            push!(remaining_indices, i)
+        end
+    end
+
+    log_info(point_filter, "before: $(size(points, 2)) after: $(length(remaining_indices))")
     return remaining_indices
 end

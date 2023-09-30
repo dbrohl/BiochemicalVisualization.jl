@@ -126,8 +126,8 @@ function prepare_backbone_model(
         c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
         
         spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T}, (q::AbstractMatrix{T}, r::AbstractMatrix{T}, s::AbstractMatrix{T}) =  c_alpha_spline(vertices_per_unit)
-        #filtered_indices = filter_points_stoch(spline_points, accelerations)
-        filtered_indices = no_filter(spline_points)
+        filtered_indices = filter_points_threshold(spline_points, q)
+        #filtered_indices = no_filter(spline_points)
 
         log_info(types, "Type of spline points: ", typeof(spline_points))
 
@@ -142,7 +142,7 @@ function prepare_backbone_model(
         mesh_edges[3, :] = repeat([resolution+1], resolution)
 
         warncounter = 0
-        for i=2:length(filtered_indices)-2 # start- and endcap bases are the first and last splinepoints
+        for i=1:length(filtered_indices) # start- and endcap bases are the first and last splinepoints #TODO offset wieder auf 2, wenn Endkappen wieder funktionieren
             current_index = filtered_indices[i]
 
             # generate circle for backbone
@@ -159,12 +159,14 @@ function prepare_backbone_model(
 
 
             # Rudimentary problem detection
-            distance_to_previous_center = min([norm(spline_points[:, filtered_indices[i-1]] - a) for a in eachcol(circle.vertices)]...)
-            distance_to_current_center = min([norm(spline_points[:, current_index] - a) for a in eachcol(circle.vertices)]...)
+            if(i>1)
+                distance_to_previous_center = min([norm(spline_points[:, filtered_indices[i-1]] - a) for a in eachcol(circle.vertices)]...)
+                distance_to_current_center = min([norm(spline_points[:, current_index] - a) for a in eachcol(circle.vertices)]...)
 
-            if(distance_to_previous_center < distance_to_current_center)
-                warncounter = 20
-                log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $current_index")
+                if(distance_to_previous_center < distance_to_current_center)
+                    warncounter = 20
+                    log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $current_index")
+                end
             end
 
             if(warncounter>0)

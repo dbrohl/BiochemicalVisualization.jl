@@ -41,6 +41,7 @@ function (spline::CatmullRom)(resolution)
         temp = [0; 1; 0]
     end
     initial_r = cross(initial_tangent, temp)
+    initial_r = initial_r ./ norm(initial_r)
     ts, rs, ss = rmf(result_points, result_velocities, initial_r, cross(initial_tangent, initial_r))
 
     return result_points, result_velocities, result_accs, (ts, rs, ss)
@@ -70,6 +71,7 @@ function rmf(points, tangents, r0, s0)
         v2 = ts[:, i+1] - t_i_L
         c2 = dot(v2, v2)
         rs[:, i+1] = r_i_L - (2/c2) * dot(v2, r_i_L) * v2
+        rs[:, i+1] = rs[:, i+1] ./ norm(rs[:, i+1])
         ss[:, i+1] = cross(ts[:, i+1], rs[:, i+1])
     end
     return ts, rs, ss

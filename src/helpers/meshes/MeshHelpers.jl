@@ -107,14 +107,14 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
 
             shift, flip = determine_offset(points[:, current_indices[1]], points[:, current_indices[2]], points[:, prev_indices])
             if(shift!=0)
-                prev_indices = circshift(prev_indices, -shift)
+                #prev_indices = circshift(prev_indices, -shift)
                 shiftSum += abs(shift)
             end
             if(flip)
 
                 log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices) # TODO 1c4k has a problem and flip is detected
-                colors[current_indices] = repeat([FLIP_COLOR], length(current_indices))
-                reverse!(prev_indices)
+                #colors[current_indices] = repeat([FLIP_COLOR], length(current_indices))
+                #reverse!(prev_indices)
             end
 
             connections[1, connection_i:connection_i+resolution-1] = current_indices'

@@ -111,7 +111,7 @@ function prepare_backbone_model(
         @assert length(c_alphas)>=2 # TODO was sonst?
 
         # c alpha export
-        sphere_radius = 0.02
+        sphere_radius = 0.05
         sphere_mesh = simplexify(Sphere{3, U}((0,0,0), sphere_radius))
 
         spheres = map(a -> Translate(U.(a.r)...)((sphere_mesh)), c_alphas)
@@ -123,27 +123,16 @@ function prepare_backbone_model(
 
 
         # real backbone
-
         c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
         
         spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T}, (q::AbstractMatrix{T}, r::AbstractMatrix{T}, s::AbstractMatrix{T}) =  c_alpha_spline(vertices_per_unit)
-        min_vel = minimum(norm, eachcol(velocities))
-        max_vel = maximum(norm, eachcol(velocities))
-        min_acc = minimum(norm, eachcol(accelerations))
-        max_acc = maximum(norm, eachcol(accelerations))
-
-        println("vel: [$min_vel; $max_vel]")
+        #filtered_indices = filter_points_stoch(spline_points, accelerations)
+        filtered_indices = no_filter(spline_points)
 
         log_info(types, "Type of spline points: ", typeof(spline_points))
-        #println("#splinepoints", size(spline_points, 2))
-
-        # verts = [Point3(x...) for x in eachcol(spline_points)]
-        # connects = [connect((a, b)) for (a, b) in zip(1:length(verts)-1, 2:length(verts))]
-        # export_mesh_to_ply("spline.ply", SimpleMesh(verts, connects))
 
         circles::Vector{PlainNonStdMesh{U}} = []
 
-        circle_meshes::Vector{PlainMesh{U}} = []
         framesA::Vector{ColoredMesh} = []
         framesB::Vector{ColoredMesh} = []
         push!(framesB, local_frame_mesh(spline_points[:, 1], q[:, 1], r[:, 1], s[:, 1]))
@@ -153,87 +142,40 @@ function prepare_backbone_model(
         mesh_edges[3, :] = repeat([resolution+1], resolution)
 
         warncounter = 0
-        count_bits::Vector{Bool} = []
-        for i=2:size(spline_points, 2)-2 # start- and endcap bases are the first and last splinepoints
-            tangent = spline_points[:, i+1] .- spline_points[:, i]
-            tangent_length = norm(tangent)
-
-            if(approx_zero(tangent_length)) 
-                # Duplicate points (in one location) generate a normal vector with length 0, which leads to a wrong orientation of the circle.
-                # (It also would be duplicated and unnecessary)
-                continue
-            end
-
-            # debug output
-            # frameA = local_arrow_mesh(spline_points[:, i], velocities[:, i], (255, 0, 0))
-            # frameB = local_arrow_mesh(spline_points[:, i], tangent, (0, 255, 0))
-
-
-
-            # construct artificial frame
-            tangent = velocities[:, i]./norm(velocities[:, i])
-            normal = accelerations[:, i]./norm(accelerations[:, i])
-            binormal = cross(tangent, normal)
+        for i=2:length(filtered_indices)-2 # start- and endcap bases are the first and last splinepoints
+            current_index = filtered_indices[i]
 
             # generate circle for backbone
-            circle_points = create_circle_in_local_frame(spline_points[:, i], r[:, i], s[:, i], resolution, stick_radius)
+            circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
-            # circle_mesh = PlainMesh([circle_points spline_points[:, i]], mesh_edges, repeat([(255, 255, 255)], resolution+1))
 
-            # # debug output
-            # frame = local_arrow_mesh(spline_points[:, i], velocities[:, i], (255, 0, 0))
-            # frame = merge(frame, local_arrow_mesh(spline_points[:, i], tangent, (0, 255, 0)))
-            frameA = local_frame_mesh(spline_points[:, i], q[:, i], r[:, i], s[:, i])
-            # relative_vel_size = (norm(velocities[:, i])-min_vel)/(max_vel-min_vel)
-            # relative_acc_size = (norm(accelerations[:, i])-min_acc)/(max_acc-min_acc)
-            # #println(relative_vel_size)
-            # frame = local_arrow_mesh(spline_points[:, i], velocities[:, i], (255-Int(round(relative_vel_size*255)), 255-Int(round(relative_vel_size*255)), 255))
-            # frame = merge(frame, local_arrow_mesh(spline_points[:, i], accelerations[:, i], (255, 255-Int(round(relative_acc_size*255)), 255-Int(round(relative_acc_size*255)))))
+            # debug output
+            frameA = local_frame_mesh(spline_points[:, current_index], q[:, current_index], r[:, current_index], s[:, current_index])
 
             # sanity check: RMF should be orthogonal
-            if(!approx_zero(dot(q[:, i], r[:, i])) || !approx_zero(dot(q[:, i], s[:, i])) || !approx_zero(dot(s[:, i], r[:, i])))
-                log_info(misc, i, " wrong angles ", dot(q[:, i], r[:, i]), " ", dot(q[:, i], s[:, i]), " ", dot(s[:, i], r[:, i]), " # ", q[:, i], " ", r[:, i], " ", s[:, i])
+            if(!approx_zero(dot(q[:, current_index], r[:, current_index])) || !approx_zero(dot(q[:, current_index], s[:, current_index])) || !approx_zero(dot(s[:, current_index], r[:, current_index])))
+                log_info(misc, current_index, " wrong angles ", dot(q[:, current_index], r[:, current_index]), " ", dot(q[:, current_index], s[:, current_index]), " ", dot(s[:, current_index], r[:, current_index]), " # ", q[:, current_index], " ", r[:, current_index], " ", s[:, current_index])
             end
 
 
             # Rudimentary problem detection
-            distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
-            distance_to_current_center = min([norm(spline_points[:, i] - a) for a in eachcol(circle.vertices)]...)
+            distance_to_previous_center = min([norm(spline_points[:, filtered_indices[i-1]] - a) for a in eachcol(circle.vertices)]...)
+            distance_to_current_center = min([norm(spline_points[:, current_index] - a) for a in eachcol(circle.vertices)]...)
 
             if(distance_to_previous_center < distance_to_current_center)
                 warncounter = 20
-                log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $i")
+                log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $current_index")
             end
 
-            if(i%100==0) 
-                count_bits = []
-                num::Int32 = i÷100
-                while(num!=0)
-                    push!(count_bits, convert(Bool, num & 0x00000001))
-                    num = num >> 1
-                end
-                color!(circle, COUNT_COLOR_START)
+            if(warncounter>0)
+                color!(circle, BREAK_COLOR)
+                warncounter -= 1
             else
-
-
-                if(warncounter>0)
-                    color!(circle, BREAK_COLOR)
-                    warncounter -= 1
-                else
-                    if(length(count_bits)!=0)
-                        val = pop!(count_bits)
-                        color!(circle, val ? COUNT_COLOR_1 : COUNT_COLOR_0)
-                    else
-
-                        color!(circle, in(i%100, [0,1]) ? COUNT_COLOR : chain_colors[chain_num])
-                        # color!(circle, BACKGROUND_COLOR)
-                    end
-                end
+                color!(circle, chain_colors[chain_num])
             end
             #color!(circle, chain_colors[chain_num])
 
             push!(circles, circle)
-            #push!(circle_meshes, circle_mesh)
             push!(framesA, frameA)
             #push!(framesB, frameB)
 
@@ -243,7 +185,6 @@ function prepare_backbone_model(
         # export_mesh_to_ply("circles.ply", m1)
 
         spline_mesh = connect_circles_to_tube(circles)
-
         log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
         # ----- debug export -----

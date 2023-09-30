@@ -34,11 +34,6 @@ function (spline::CatmullRom)(resolution)
         
     end
 
-    # unit_tangents = Matrix(undef, 3, size(result_velocities, 2))
-    # for i=1:size(result_velocities, 2)
-    #     unit_tangents[:, i] = result_velocities[:, i]/norm(result_velocities[:, i])
-    # end
-
     initial_tangent = result_velocities[:, 1]./norm(result_velocities[:, 1])
     if(approx_zero(initial_tangent[2]) && approx_zero(initial_tangent[3]))
         temp = [1; 0; 0]
@@ -48,38 +43,12 @@ function (spline::CatmullRom)(resolution)
     initial_r = cross(initial_tangent, temp)
     ts, rs, ss = rmf(result_points, result_velocities, initial_r, cross(initial_tangent, initial_r))
 
-    # return result_points, unit_tangents, rs, ss
     return result_points, result_velocities, result_accs, (ts, rs, ss)
-    #return filter_points(result_points, result_velocities, result_accs)
 end
 
-function filter_points(points, velocities, accs)
-    min_acc = minimum(norm, eachcol(accs))
-    max_acc = maximum(norm, eachcol(accs))
 
-    res_points = Matrix(undef, 3, 0)
-    res_vels = Matrix(undef, 3, 0)
-    res_accs = Matrix(undef, 3, 0)
-    println(min_acc, " ", max_acc)
-    for i=axes(points, 2)
-        relative_acc = (norm(accs[:, i])-min_acc)/(max_acc-min_acc)
-        random_bound = relative_acc*0.8 + 0.2
 
-        r = rand(Float32)
-
-        if(i<10)
-            println("relative: $relative_acc, in  [0.5, 1]: $random_bound, r=$r => keep?: $(random_bound>=r)")
-        end
-        if(i==1 || i==axes(points, 2) || random_bound>=r)
-            res_points = [res_points points[:, i]]
-            res_vels = [res_vels velocities[:, i]]
-            res_accs = [res_accs accs[:, i]]
-        end
-    end
-    println("before: $(size(points, 2)) after: $(size(res_points, 2))")
-    return res_points, res_vels, res_accs
-end
-
+# based on W. Wang, B. Jüttler, D. Zheng, and Y. Liu, ‘Computation of rotation minimizing frames’, doi: 10.1145/1330511.1330513.
 function rmf(points, tangents, r0, s0)
 
     ts = Matrix(undef, 3, size(points, 2))
@@ -172,5 +141,3 @@ function tRecursion(pCurr, pPrev, tPrev)
     distance = norm(pCurr .- pPrev)
     return distance^0.5 + tPrev
 end
-
-# TODO find duplicated calculations, granularity for spline

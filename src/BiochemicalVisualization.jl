@@ -42,12 +42,13 @@ else
     log_info(gpu, "Using CPU")
 end # TODO other backends
 
-include("helpers/PlainMesh.jl")
-include("helpers/PlainNonStdMesh.jl")
-include("helpers/ColoredMesh.jl")
-include("helpers/MeshHelpers.jl")
+include("helpers/meshes/PlainMesh.jl")
+include("helpers/meshes/PlainNonStdMesh.jl")
+include("helpers/meshes/ColoredMesh.jl")
+include("helpers/meshes/MeshHelpers.jl")
 include("helpers/gpu_rotation_test.jl")
 include("helpers/utils.jl")
+include("helpers/point_filter.jl")
 
 include("core/representation.jl")
 include("core/visualize.jl")

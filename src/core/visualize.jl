@@ -2,7 +2,8 @@ export
 ball_and_stick, 
 stick, 
 van_der_waals,
-backbone, backbone_gpu
+backbone, backbone_gpu,
+ribbon
 
 const VISUALIZE = ES6Module(asset_path("visualize_structure.js"))::Asset
 
@@ -216,4 +217,9 @@ end
 function backbone_gpu(ac)
 	representation = prepare_backbone_model_gpu(ac, resolution = 12)
 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
+end 
+
+function ribbon(ac; resolution=12, path="BALL_export_ribbon.ply")
+	representation = prepare_ribbon_model(ac, resolution = resolution)
+	#TODO export_mesh_representation_to_ply(path, representation)
 end 

@@ -54,12 +54,13 @@ include("core/representation.jl")
 include("core/visualize.jl")
 
 include("splines/CatmullRom.jl")
+include("splines/CubicB.jl")
 
 
 include("core/export.jl")
 
 
-
+include("models/ribbon.jl")
 include("models/backbone.jl")
 include("models/backbone_gpu.jl")
 include("models/ball_and_stick.jl")

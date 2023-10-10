@@ -28,9 +28,9 @@ end
 # Tangents should be normalized!
 function filter_points_threshold(points, tangents)
     remaining_indices = []
+
     for i=axes(points, 2)
         if(i==firstindex(points, 2) || i==lastindex(points, 2))
-            println("Found start or end ", i)
             push!(remaining_indices, i)
             continue
         end

@@ -111,30 +111,42 @@ function prepare_backbone_model(
         @assert length(c_alphas)>=2 # TODO was sonst?
 
         # c alpha export
-        sphere_radius = 0.05
-        sphere_mesh = simplexify(Sphere{3, U}((0,0,0), sphere_radius))
+        # sphere_radius = 0.05
+        # sphere_mesh = simplexify(Sphere{3, U}((0,0,0), sphere_radius))
 
-        spheres = map(a -> Translate(U.(a.r)...)((sphere_mesh)), c_alphas)
-        spheres = map(s -> ColoredMesh(s, (0, 0, 0)), spheres)
-        m1 = reduce(merge, spheres)
-        export_mesh_to_ply("c-alpha.ply", m1)
+        # spheres = map(a -> Translate(U.(a.r)...)((sphere_mesh)), c_alphas)
+        # spheres = map(s -> ColoredMesh(s, (0, 0, 0)), spheres)
+        # m1 = reduce(merge, spheres)
+        # export_mesh_to_ply("c-alpha.ply", m1)
 
 
 
 
         # real backbone
         c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
+        #c_alpha_spline = CubicB(chain)
         
         spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T} = c_alpha_spline(vertices_per_unit)
         for i = axes(velocities, 2)
             velocities[:, i] = velocities[:, i] ./ norm(velocities[:, i])
         end
 
+        # delete points with too small tangent vectors to avoid numerical problems
+        mask = .!approx_zero.(map(t -> norm(t), eachcol(velocities)))
+        spline_points = spline_points[:, mask]
+        velocities = velocities[:, mask]
+
         filtered_indices = filter_points_threshold(spline_points, velocities)
         spline_points = spline_points[:, filtered_indices]
         velocities = velocities[:, filtered_indices]
 
+        # sphere_radius = 0.2
+        # sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
+        # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (0, 255, 0)), eachcol(spline_points)))
+        # export_mesh_to_ply("filtered_points.ply", debug_mesh)
+
         q::AbstractMatrix{T}, r::AbstractMatrix{T}, s::AbstractMatrix{T} = rmf(spline_points, velocities)
+        # TODO short chains with <4 CA atoms
         
         #filtered_indices = no_filter(spline_points)
 
@@ -212,7 +224,7 @@ function prepare_backbone_model(
         # ----- add hemispheres to both ends -----
 
     #     # position
-    #     start_cap = deepcopy(cap_mesh)
+    #     TODO start_cap = deepcopy(cap_mesh)
     #     rotate_in_direction!(start_cap, -(spline_points[:, 2]-spline_points[:, 1]))
     #     translate!(start_cap, spline_points[:, 1])
     #     end_cap = deepcopy(cap_mesh)

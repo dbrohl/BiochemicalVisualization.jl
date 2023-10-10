@@ -4,6 +4,7 @@ authors = ["Andreas Hildebrandt <andreas.hildebrandt@uni-mainz.de> and contribut
 version = "0.1.0"
 
 [deps]
+BSplineKit = "093aae92-e908-43d7-9660-e50ee39d5a0a"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BiochemicalAlgorithms = "9d651bdf-8945-47d1-9188-34e269d8f7b5"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"

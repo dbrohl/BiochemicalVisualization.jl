@@ -105,7 +105,7 @@ function prepare_backbone_model(
     #log_info(types, "Types of proto meshes: ", typeof(circle_mesh), " ", typeof(cap_mesh))
     chain_meshes::Vector{PlainMesh{U}} = []
     chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end])
-    for (chain_num, chain) in enumerate(eachchain(ac))
+    for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac)[1:1]) #TODO rückgängig machen
 
         c_alphas = filter(x -> x.element==Elements.C && x.name=="CA", atoms(chain))
         @assert length(c_alphas)>=2 # TODO was sonst?
@@ -121,33 +121,51 @@ function prepare_backbone_model(
 
 
 
-
         # real backbone
-        c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
-        #c_alpha_spline = CubicB(chain)
-        
-        spline_points::AbstractMatrix{T}, velocities::AbstractMatrix{T}, accelerations::AbstractMatrix{T} = c_alpha_spline(vertices_per_unit)
-        for i = axes(velocities, 2)
-            velocities[:, i] = velocities[:, i] ./ norm(velocities[:, i])
+        #c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
+        c_alpha_spline = CubicB(chain)
+
+        rms = false
+        local spline_points::AbstractMatrix{T}
+        local velocities::AbstractMatrix{T}
+        local accelerations::AbstractMatrix{T} 
+        local q::AbstractMatrix{T}
+        local r::AbstractMatrix{T}
+        local s::AbstractMatrix{T}
+        if(rms)
+            spline_points, velocities, accelerations = c_alpha_spline(vertices_per_unit)
+            for i = axes(velocities, 2)
+                velocities[:, i] = velocities[:, i] ./ norm(velocities[:, i])
+            end
+
+            # delete points with too small tangent vectors to avoid numerical problems
+            mask = .!approx_zero.(map(t -> norm(t), eachcol(velocities)))
+            spline_points = spline_points[:, mask]
+            velocities = velocities[:, mask]
+
+            filtered_indices = filter_points_threshold(spline_points, velocities)
+            spline_points = spline_points[:, filtered_indices]
+            velocities = velocities[:, filtered_indices]
+
+            # sphere_radius = 0.2
+            # sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
+            # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (0, 255, 0)), eachcol(spline_points)))
+            # export_mesh_to_ply("filtered_points.ply", debug_mesh)
+
+            q, r, s = rmf(spline_points, velocities)
+        else
+            # TODO short chains with <4 CA atoms
+
+            spline_points, velocities, accelerations, q, r, s, = c_alpha_spline(vertices_per_unit, with_frames=true)
+
+            filtered_indices = filter_points_threshold(spline_points, velocities)
+            spline_points = spline_points[:, filtered_indices]
+            velocities = velocities[:, filtered_indices]
+            q = q[:, filtered_indices]
+            r = r[:, filtered_indices]
+            s = s[:, filtered_indices]
         end
 
-        # delete points with too small tangent vectors to avoid numerical problems
-        mask = .!approx_zero.(map(t -> norm(t), eachcol(velocities)))
-        spline_points = spline_points[:, mask]
-        velocities = velocities[:, mask]
-
-        filtered_indices = filter_points_threshold(spline_points, velocities)
-        spline_points = spline_points[:, filtered_indices]
-        velocities = velocities[:, filtered_indices]
-
-        # sphere_radius = 0.2
-        # sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
-        # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (0, 255, 0)), eachcol(spline_points)))
-        # export_mesh_to_ply("filtered_points.ply", debug_mesh)
-
-        q::AbstractMatrix{T}, r::AbstractMatrix{T}, s::AbstractMatrix{T} = rmf(spline_points, velocities)
-        # TODO short chains with <4 CA atoms
-        
         #filtered_indices = no_filter(spline_points)
 
         log_info(types, "Type of spline points: ", typeof(spline_points))
@@ -167,8 +185,8 @@ function prepare_backbone_model(
             current_index = i
 
             # generate circle for backbone
-            circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
-            #circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
+            #circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
+            circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
 
             # debug output

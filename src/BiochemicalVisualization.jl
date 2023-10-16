@@ -14,7 +14,6 @@ using Dates
 using StaticArrays
 
 using KernelAbstractions
-using BSplineKit
 
 
 using BenchmarkTools # TODO not necessary for package

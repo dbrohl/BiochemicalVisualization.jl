@@ -87,7 +87,7 @@ end
 
 function prepare_backbone_model(
     ac::AbstractAtomContainer{T}; 
-    stick_radius=T(0.2), resolution=30) where {T<:Real}
+    stick_radius=T(0.2), resolution=30, rms_frames=true) where {T<:Real}
 
     start_time = now()
     U = Float64
@@ -105,7 +105,7 @@ function prepare_backbone_model(
     #log_info(types, "Types of proto meshes: ", typeof(circle_mesh), " ", typeof(cap_mesh))
     chain_meshes::Vector{PlainMesh{U}} = []
     chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end])
-    for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac)[1:1]) #TODO rückgängig machen
+    for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
 
         c_alphas = filter(x -> x.element==Elements.C && x.name=="CA", atoms(chain))
         @assert length(c_alphas)>=2 # TODO was sonst?
@@ -125,14 +125,13 @@ function prepare_backbone_model(
         #c_alpha_spline = CatmullRom(hcat(map(x->x.r, c_alphas)...))
         c_alpha_spline = CubicB(chain)
 
-        rms = false
         local spline_points::AbstractMatrix{T}
         local velocities::AbstractMatrix{T}
         local accelerations::AbstractMatrix{T} 
         local q::AbstractMatrix{T}
         local r::AbstractMatrix{T}
         local s::AbstractMatrix{T}
-        if(rms)
+        if(rms_frames)
             spline_points, velocities, accelerations = c_alpha_spline(vertices_per_unit)
             for i = axes(velocities, 2)
                 velocities[:, i] = velocities[:, i] ./ norm(velocities[:, i])

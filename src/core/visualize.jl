@@ -209,8 +209,8 @@ stick(ac)          = display_model(ac; type="STICK")
 van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 
 
-function backbone(ac; resolution=12, path="BALL_export_backbone.ply")
-	representation = prepare_backbone_model(ac, resolution = resolution)
+function backbone(ac; resolution=12, path="BALL_export_backbone.ply", rms_frames=true)
+	representation = prepare_backbone_model(ac, resolution = resolution, rms_frames=rms_frames)
 	export_mesh_representation_to_ply(path, representation)
 end 
 

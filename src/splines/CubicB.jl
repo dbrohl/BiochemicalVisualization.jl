@@ -2,12 +2,14 @@ mutable struct CubicB
     main_ribbon::AbstractMatrix
     minor_ribbon_a::AbstractMatrix
     minor_ribbon_b::AbstractMatrix
+    structures::Array{Enum}
 
     function CubicB(chain)
         ribbon_width = Dict(SecondaryStructure.HELIX => 3, SecondaryStructure.SHEET => 3, SecondaryStructure.NONE => 1)
     
         c_alphas = []
         oxygens = []
+        structures = []
         for fragment in eachfragment(chain)
             if(is_amino_acid(fragment.name))
                 ca = filter(x -> x.element==Elements.C && x.name=="CA", atoms(fragment))
@@ -16,9 +18,9 @@ mutable struct CubicB
 
                 push!(c_alphas, ca[1])
                 push!(oxygens, ox[1])
+                push!(structures, fragment.properties[:SS])
             end
         end
-        structures = [SecondaryStructure.NONE for a in c_alphas] # TODO 
 
         # template for debug output
         # colors = [(255, 0, 0), (255, 255, 0), (0, 255, 0), (0, 255, 255), (0, 0, 255), (255, 0, 255)]
@@ -29,9 +31,9 @@ mutable struct CubicB
         # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a.r)...)((sphere_mesh)), (0, 0, 255)), oxygens))
         # export_mesh_to_ply("oxygens.ply", debug_mesh)
 
-        main_points = Matrix{Float64}(undef, 3, length(c_alphas)-1)
-        outer_points = Matrix{Float64}(undef, 3, length(c_alphas)-1)
-        outer_points_2 = Matrix{Float64}(undef, 3, length(c_alphas)-1)
+        main_points = Matrix{Float64}(undef, 3, length(c_alphas)+1)
+        outer_points = Matrix{Float64}(undef, 3, length(c_alphas)+1)
+        outer_points_2 = Matrix{Float64}(undef, 3, length(c_alphas)+1)
         prev_D = nothing
 
         current_flip = false
@@ -56,21 +58,45 @@ mutable struct CubicB
             
             P = c_alphas[i].r + 0.5 * A
             if(structures[i]==SecondaryStructure.HELIX || structures[i+1]==SecondaryStructure.HELIX) # TODO correct condition?
-                # TODO translate
+                P += 1.5 * C
             end
-            D *= 0.5 * ribbon_width[structures[i]]
+            D *= 0.5 * ribbon_width[structures[i]] * 0.5
     
-            main_points[:, i] = P
+            main_points[:, i+1] = P
             if(current_flip)
-                outer_points[:, i] = P+D
-                outer_points_2[:, i] = P-D
+                outer_points[:, i+1] = P+D
+                outer_points_2[:, i+1] = P-D
             else
-                outer_points[:, i] = P-D
-                outer_points_2[:, i] = P+D
-            end 
+                outer_points[:, i+1] = P-D
+                outer_points_2[:, i+1] = P+D
+            end
+
+            if(i==1)
+                main_points[:, i] = P
+                if(current_flip)
+                    outer_points[:, i] = P+D
+                    outer_points_2[:, i] = P-D
+                else
+                    outer_points[:, i] = P-D
+                    outer_points_2[:, i] = P+D
+                end
+            end
+            if(i==length(c_alphas)-1)
+                main_points[:, i+2] = P
+                if(current_flip)
+                    outer_points[:, i+2] = P+D
+                    outer_points_2[:, i+2] = P-D
+                else
+                    outer_points[:, i+2] = P-D
+                    outer_points_2[:, i+2] = P+D
+                end
+            end
 
             
         end
+
+        prepend!(structures, [structures[1]])
+        push!(structures, structures[end])
 
         dm1 = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (100, 100, 100)), eachcol(main_points)))
         dm2 = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (255, 0, 0)), eachcol(outer_points)))
@@ -78,7 +104,7 @@ mutable struct CubicB
         debug_mesh = BiochemicalVisualization.merge(BiochemicalVisualization.merge(dm1, dm2), dm3)
         export_mesh_to_ply("control_points.ply", debug_mesh)
 
-        new(main_points,outer_points, outer_points_2)
+        new(main_points,outer_points, outer_points_2, structures)
     end
 end
 
@@ -88,13 +114,14 @@ function (spline::CubicB)(resolution; with_frames=false)
     i = 1
     while i+3 <= size(spline.main_ribbon, 2)
         distance = norm(spline.main_ribbon[:, i+1] .- spline.main_ribbon[:, i+2])
-        push!(num_points, max(2, convert(Int, ceil(resolution * 2 * distance))))
+        push!(num_points, max(2, convert(Int, ceil(resolution * 0.5 * distance)))) #TODO factor
         i += 1
     end
 
     points = Matrix(undef, 3, sum(num_points)-length(num_points)+1)
     velocities = Matrix(undef, 3, sum(num_points)-length(num_points)+1)
     accelerations = Matrix(undef, 3, sum(num_points)-length(num_points)+1)
+    point_structures = Array{Enum}(undef, sum(num_points)-length(num_points)+1)
     if(with_frames)
         rs = Matrix(undef, 3, sum(num_points)-length(num_points)+1) # points of minor ribbon
     end
@@ -109,7 +136,8 @@ function (spline::CubicB)(resolution; with_frames=false)
 
         p_matrix = spline.main_ribbon[:, i:i+3]'
         sampling_range = range(0, 1, num_points[i])
-        for t in sampling_range
+        #println("Points $i to $(i+3), SSs: $(spline.structures[i:i+3])")
+        for (j, t) in enumerate(sampling_range)
             points[:, a] = [1 t t^2 t^3] * 1/6 * M * p_matrix
             velocities[:, a] = [0 1 2*t 3*t^2] * 1/6 * M * p_matrix
             accelerations[:, a] = [0 0 2 6*t] * 1/6 * M * p_matrix
@@ -117,6 +145,9 @@ function (spline::CubicB)(resolution; with_frames=false)
             if(with_frames)
                 rs[:, a] = [1 t t^2 t^3] * 1/6 * M * spline.minor_ribbon_a[:, i:i+3]'
             end
+
+            
+            point_structures[a] = spline.structures[i+2]
             a+=1
         end
         a-=1
@@ -163,8 +194,8 @@ function (spline::CubicB)(resolution; with_frames=false)
             # third axis is perpendicular to the tangent and r
             ss[:, i] = cross(normalized_tangents[:, i], rs[:, i])
         end
-        return points, velocities, accelerations, normalized_tangents, rs, ss
+        return points, velocities, accelerations, point_structures, normalized_tangents, rs, ss
     end
 
-    return points, velocities, accelerations
+    return points, velocities, accelerations, point_structures
 end

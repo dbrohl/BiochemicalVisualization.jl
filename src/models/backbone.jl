@@ -8,6 +8,11 @@ COUNT_COLOR_0::NTuple{3, Int} = (0, 0, 255)
 COUNT_COLOR_1::NTuple{3, Int} = (0, 255, 255)
 BACKGROUND_COLOR::NTuple{3, Int} = (60, 60, 60)
 
+structure_color_mapping = Dict(
+    SecondaryStructure.NONE => (255, 255, 255), 
+    SecondaryStructure.HELIX => (255, 75, 120), 
+    SecondaryStructure.SHEET => (255, 150, 0))
+
 function rotation_test()
     stick_radius = 0.5
     resolution=30
@@ -128,11 +133,12 @@ function prepare_backbone_model(
         local spline_points::AbstractMatrix{T}
         local velocities::AbstractMatrix{T}
         local accelerations::AbstractMatrix{T} 
+        local structures::Array{Enum}
         local q::AbstractMatrix{T}
         local r::AbstractMatrix{T}
         local s::AbstractMatrix{T}
         if(rms_frames)
-            spline_points, velocities, accelerations = c_alpha_spline(vertices_per_unit)
+            spline_points, velocities, accelerations, structures = c_alpha_spline(vertices_per_unit)
             for i = axes(velocities, 2)
                 velocities[:, i] = velocities[:, i] ./ norm(velocities[:, i])
             end
@@ -141,10 +147,12 @@ function prepare_backbone_model(
             mask = .!approx_zero.(map(t -> norm(t), eachcol(velocities)))
             spline_points = spline_points[:, mask]
             velocities = velocities[:, mask]
+            structures = structures[mask]
 
             filtered_indices = filter_points_threshold(spline_points, velocities)
             spline_points = spline_points[:, filtered_indices]
             velocities = velocities[:, filtered_indices]
+            structures = structures[filtered_indices]
 
             # sphere_radius = 0.2
             # sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
@@ -155,11 +163,12 @@ function prepare_backbone_model(
         else
             # TODO short chains with <4 CA atoms
 
-            spline_points, velocities, accelerations, q, r, s, = c_alpha_spline(vertices_per_unit, with_frames=true)
+            spline_points, velocities, accelerations, structures, q, r, s, = c_alpha_spline(vertices_per_unit, with_frames=true)
 
             filtered_indices = filter_points_threshold(spline_points, velocities)
             spline_points = spline_points[:, filtered_indices]
             velocities = velocities[:, filtered_indices]
+            structures = structures[filtered_indices]
             q = q[:, filtered_indices]
             r = r[:, filtered_indices]
             s = s[:, filtered_indices]
@@ -185,7 +194,16 @@ function prepare_backbone_model(
 
             # generate circle for backbone
             #circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
-            circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
+            if(structures[i]==SecondaryStructure.NONE)
+                circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
+            elseif(structures[i]==SecondaryStructure.HELIX)
+                circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
+            elseif(structures[i]==SecondaryStructure.SHEET)
+                circle_points = create_rectangle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], resolution, stick_radius)
+            end
+            
+            
+            
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
 
             # debug output
@@ -198,23 +216,26 @@ function prepare_backbone_model(
 
 
             # Rudimentary problem detection
-            if(i>1)
-                distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
-                distance_to_current_center = min([norm(spline_points[:, current_index] - a) for a in eachcol(circle.vertices)]...)
+            # if(i>1)
+            #     distance_to_previous_center = min([norm(spline_points[:, i-1] - a) for a in eachcol(circle.vertices)]...)
+            #     distance_to_current_center = min([norm(spline_points[:, current_index] - a) for a in eachcol(circle.vertices)]...)
 
-                if(distance_to_previous_center < distance_to_current_center)
-                    warncounter = 20
-                    log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $current_index")
-                end
-            end
+            #     if(distance_to_previous_center < distance_to_current_center)
+            #         warncounter = 20
+            #         log_info(damaged_mesh, "Possible broken mesh, chain $chain_num spline_point $current_index")
+            #     end
+            # end
 
-            if(warncounter>0)
-                color!(circle, BREAK_COLOR)
-                warncounter -= 1
-            else
-                color!(circle, chain_colors[chain_num])
-            end
+            # if(warncounter>0)
+            #     color!(circle, BREAK_COLOR)
+            #     warncounter -= 1
+            # else
+            #     color!(circle, chain_colors[chain_num])
+            # end
+
             #color!(circle, chain_colors[chain_num])
+
+            color!(circle, structure_color_mapping[structures[i]])
 
             push!(circles, circle)
             push!(framesA, frameA)

@@ -41,7 +41,56 @@ function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::Abstra
     points = Matrix{T}(undef, 3, resolution)
 
     for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
-        points[:, i] = center + 2*radius*cos(α)*local_y + radius*sin(α)*local_z
+        points[:, i] = center + 3*radius*cos(α)*local_y + radius*sin(α)*local_z/2
+    end
+    return points
+end
+
+function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T<:AbstractFloat
+    points = Matrix{T}(undef, 3, resolution)
+
+    remaining_points = resolution-4
+    ratio = 1/6
+    short_sides = Int(ceil(remaining_points*ratio))
+    long_sides = remaining_points - short_sides
+    
+    B = Int(floor(long_sides/2))
+    D = long_sides-B
+    C = Int(floor(short_sides/2))
+    AE = short_sides-C
+    A = Int(floor(AE/2))
+    E = AE-A
+    
+    half_width = 3*radius*local_y
+    half_height = radius*local_z
+    a = 1
+    for y in collect(range(0, 1, A+2))[2:end-1]
+        points[:, a] = center + half_width + y*half_height
+        a+=1
+    end
+    points[:, a] = center + half_width + half_height
+    a+=1
+    for x in collect(range(1, -1, B+2))[2:end-1]
+        points[:, a] = center + x*half_width + half_height
+        a+=1
+    end
+    points[:, a] = center - half_width + half_height
+    a+=1
+    for y in collect(range(1, -1, C+2))[2:end-1]
+        points[:, a] = center - half_width + y*half_height
+        a+=1
+    end
+    points[:, a] = center - half_width - half_height
+    a+=1
+    for x in collect(range(-1, 1, D+2))[2:end-1]
+        points[:, a] = center + x*half_width - half_height
+        a+=1
+    end
+    points[:, a] = center + half_width - half_height
+    a+=1
+    for y in collect(range(-1, 0, E+2))[2:end-1]
+        points[:, a] = center + half_width + y*half_height
+        a+=1
     end
     return points
 end
@@ -127,13 +176,13 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
                 #reverse!(prev_indices)
             end
 
-            if(shift!=0 || flip)
-                color_count=10
-            end
-            if(color_count!=0)
-                color_count -= 1
-                colors[current_indices] = repeat([color_count==9 ? BACKGROUND_COLOR : FLIP_COLOR], length(current_indices))
-            end
+            # if(shift!=0 || flip)
+            #     color_count=10
+            # end
+            # if(color_count!=0)
+            #     color_count -= 1
+            #     colors[current_indices] = repeat([color_count==9 ? BACKGROUND_COLOR : FLIP_COLOR], length(current_indices))
+            # end
 
             connections[1, connection_i:connection_i+resolution-1] = current_indices'
             connections[2, connection_i:connection_i+resolution-1] = prev_indices'

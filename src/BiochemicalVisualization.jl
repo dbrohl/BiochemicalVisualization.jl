@@ -12,11 +12,13 @@ using Statistics
 using Rotations
 using Dates
 using StaticArrays
+using EnumX
 
 using KernelAbstractions
 
 
 using BenchmarkTools # TODO not necessary for package
+using Infiltrator
 
 
 asset_path(parts...) = normpath(joinpath(@__DIR__, "..", "assets", parts...))
@@ -53,19 +55,22 @@ include("helpers/point_filter.jl")
 include("core/representation.jl")
 include("core/visualize.jl")
 
-include("splines/CatmullRom.jl")
-include("splines/CubicB.jl")
+
 
 
 include("core/export.jl")
 
-
-include("models/ribbon.jl")
-include("models/backbone.jl")
-include("models/backbone_gpu.jl")
+include("models/backbone/backbone_config.jl")
+include("models/backbone/frame_construction.jl")
+include("models/backbone/backbone.jl")
+include("models/backbone/backbone_gpu.jl")
 include("models/ball_and_stick.jl")
 include("models/stick.jl")
 include("models/van_der_waals.jl")
+
+include("splines/SplineHelper.jl")
+include("splines/CatmullRom.jl")
+include("splines/CubicB.jl")
 
 
 end # module BiochemicalVisualization

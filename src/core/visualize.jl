@@ -209,8 +209,18 @@ stick(ac)          = display_model(ac; type="STICK")
 van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 
 
-function backbone(ac; resolution=12, path="BALL_export_backbone.ply", rms_frames=true)
-	representation = prepare_backbone_model(ac, resolution = resolution, rms_frames=rms_frames)
+function backbone(ac; path="BALL_export_backbone.ply", config=nothing)
+	if(config===nothing)
+		config = BackboneConfig(0.2, 
+		12, 
+		BackboneType.CARTOON, 
+		Color.RESIDUE, 
+		Spline.CUBIC_B, 
+		ControlPoints.MID_POINTS, 
+		Frame.SECOND_SPLINE, 
+		Filter.NONE)
+	end
+	representation = prepare_backbone_model(ac, config)
 	export_mesh_representation_to_ply(path, representation)
 end 
 
@@ -219,7 +229,7 @@ function backbone_gpu(ac)
 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
 end 
 
-function ribbon(ac; resolution=12, path="BALL_export_ribbon.ply")
+function ribbon(ac; resolution=12, path="BALL_export_ribbon.ply") # TODO fix
 	representation = prepare_ribbon_model(ac, resolution = resolution)
 	#TODO export_mesh_representation_to_ply(path, representation)
 end 

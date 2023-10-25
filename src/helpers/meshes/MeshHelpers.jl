@@ -37,18 +37,24 @@ function create_circle_in_local_frame(center::AbstractArray{T}, local_y::Abstrac
     return points
 end
 
-function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T<:AbstractFloat
+function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T<:AbstractFloat
     points = Matrix{T}(undef, 3, resolution)
 
     for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
-        points[:, i] = center + 3*radius*cos(α)*local_y + radius*sin(α)*local_z/2
+        points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
     end
     return points
 end
 
-function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T<:AbstractFloat
+function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T<:AbstractFloat
+    if(resolution<4)
+        return create_ellipse_in_local_frame(center, local_y, local_z, resolution, width, height)
+    end
+
     points = Matrix{T}(undef, 3, resolution)
 
+    # each corner has a point
+    # the remaining points are split into sections A to E
     remaining_points = resolution-4
     ratio = 1/6
     short_sides = Int(ceil(remaining_points*ratio))
@@ -61,8 +67,8 @@ function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::Abst
     A = Int(floor(AE/2))
     E = AE-A
     
-    half_width = 3*radius*local_y
-    half_height = radius*local_z
+    half_width = half_width*local_y
+    half_height = half_height*local_z
     a = 1
     for y in collect(range(0, 1, A+2))[2:end-1]
         points[:, a] = center + half_width + y*half_height

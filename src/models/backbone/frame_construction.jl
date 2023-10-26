@@ -37,7 +37,7 @@ function rmf(points, tangents)
 end
 
 # approch by M. Carson and C. E. Bugg, ‘Algorithm for ribbon models of proteins’, doi: 10.1016/0263-7855(86)80010-8.
-function frames_from_two_splines(major_spline_tangents, minor_spline_points)
+function frames_from_two_splines(major_spline_points, major_spline_tangents, minor_spline_points)
     ts = similar(major_spline_tangents)
     rs = similar(major_spline_tangents)
     ss = similar(major_spline_tangents)
@@ -47,7 +47,7 @@ function frames_from_two_splines(major_spline_tangents, minor_spline_points)
         ts[:, i] = major_spline_tangents[:, i] / norm(major_spline_tangents[:, i])
 
         # rs vectors are difference between sampled spline point and the outer spline
-        rs[:, i] = minor_spline_points[:, i] - major_spline_tangents[:, i]
+        rs[:, i] = minor_spline_points[:, i] - major_spline_points[:, i]
         #project r onto plane that is perpendicular to tangent
         rs[:, i] = rs[:, i]/norm(rs[:, i])
         rs[:, i] = rs[:, i] - dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) * ts[:, i]

@@ -56,7 +56,7 @@ function prepare_backbone_model(
         throw(ArgumentError("for a second spline, ControlPoints.MID_POINTS is mandatory"))
     end
 
-    vertices_per_unit = config.resolution / (2*π*config.stick_radius)
+    vertices_per_unit = 0.5 * config.resolution / (2*π*config.stick_radius)
     # circle_prototype = discretize(Sphere(Point(U(0),U(0)), stick_radius), RegularDiscretization(resolution))
     # circle_mesh = PlainNonStdMesh(lift_into_3d(circle_prototype))
     # cap_mesh = PlainMesh(Hemisphere(stick_radius, resolution, U))
@@ -82,6 +82,7 @@ function prepare_backbone_model(
         # sample along spline
         spline_points::Matrix{U}, sample_to_residue_indices::Vector{Int} = calculate_points(spline, vertices_per_unit)
         velocities::Matrix{U} = calculate_velocities(spline, vertices_per_unit)
+        
         # construct local frames
         local q::Matrix{U}
         local r::Matrix{U}
@@ -90,7 +91,16 @@ function prepare_backbone_model(
             q, r, s = rmf(spline_points, velocities)
         elseif(config.frame==Frame.SECOND_SPLINE)
             second_spline_points::Matrix{U} = calculate_minor_points(spline, vertices_per_unit)
-            q, r, s = frames_from_two_splines(velocities, second_spline_points)
+            q, r, s = frames_from_two_splines(spline_points, velocities, second_spline_points)
+
+
+            sphere_radius = 0.2
+            sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
+            debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 200, 200)), eachcol(spline_points)))
+            export_mesh_to_ply("main_points_new.ply", debug_mesh)
+
+            debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 0, 0)), eachcol(second_spline_points)))
+            export_mesh_to_ply("outer_points_new.ply", debug_mesh)
         end
 
         if(config.color==Color.RAINBOW)

@@ -177,7 +177,7 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
             end
             if(flip)
 
-                log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices) # TODO 1c4k has a problem and flip is detected
+                log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices)
                 #colors[current_indices] = repeat([FLIP_COLOR], length(current_indices))
                 #reverse!(prev_indices)
             end

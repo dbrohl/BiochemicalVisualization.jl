@@ -214,11 +214,11 @@ function backbone(ac; path="BALL_export_backbone.ply", config=nothing)
 		config = BackboneConfig(0.2, 
 		12, 
 		BackboneType.CARTOON, 
-		Color.RESIDUE, 
+		Color.RAINBOW, 
 		Spline.CUBIC_B, 
 		ControlPoints.MID_POINTS, 
 		Frame.SECOND_SPLINE, 
-		Filter.NONE)
+		Filter.ANGLE)
 	end
 	representation = prepare_backbone_model(ac, config)
 	export_mesh_representation_to_ply(path, representation)

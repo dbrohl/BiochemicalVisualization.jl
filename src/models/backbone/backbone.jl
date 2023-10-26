@@ -56,7 +56,7 @@ function prepare_backbone_model(
         throw(ArgumentError("for a second spline, ControlPoints.MID_POINTS is mandatory"))
     end
 
-    vertices_per_unit = 0.5 * config.resolution / (2*π*config.stick_radius)
+    vertices_per_unit = 0.4 * config.resolution / (2*π*config.stick_radius)
     # circle_prototype = discretize(Sphere(Point(U(0),U(0)), stick_radius), RegularDiscretization(resolution))
     # circle_mesh = PlainNonStdMesh(lift_into_3d(circle_prototype))
     # cap_mesh = PlainMesh(Hemisphere(stick_radius, resolution, U))
@@ -110,7 +110,7 @@ function prepare_backbone_model(
         end
 
         # filter
-        if(config.filter==Filter.TANGENTS)
+        if(config.filter==Filter.ANGLE)
             fixed_indices = [1, size(spline_points, 2)]
             if(config.backbone_type==BackboneType.CARTOON || config.color==Color.SECONDARY_STRUCTURE || config.color==Color.RESIDUE)
                 prev_res_idx = sample_to_residue_indices[1]
@@ -133,7 +133,12 @@ function prepare_backbone_model(
             sort!(fixed_indices)
             unique!(fixed_indices)
 
-            remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices)
+            if(config.color==Color.RAINBOW)
+                remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices, rainbow_colors)
+            else
+                remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices)
+            end
+            log_info(point_filter, "Remaining points: $(length(remaining_indices))/$(size(spline_points, 2))\n Filtered: $(size(spline_points, 2)-length(remaining_indices)) ($(length(fixed_indices)) fixed)")
             spline_points = spline_points[:, remaining_indices]
             sample_to_residue_indices = sample_to_residue_indices[remaining_indices]
             q = q[:, remaining_indices]

@@ -25,7 +25,7 @@ end
 end # TODO hybrid?
 @enumx Filter begin
     NONE
-    TANGENTS
+    ANGLE
 end
 
 struct BackboneConfig

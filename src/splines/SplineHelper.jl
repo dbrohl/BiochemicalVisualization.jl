@@ -9,12 +9,12 @@ function c_alphas_to_points(chain::BiochemicalAlgorithms.Chain)
             push!(point_to_residue_indices, i)
         end
     end
-    sphere_radius = 0.05
-    sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))
-    spheres = map(a -> Translate(Float32.(a)...)((sphere_mesh)), c_alphas)
-    spheres = map(s -> ColoredMesh(s, (0, 0, 0)), spheres)
-    m1 = reduce(merge, spheres)
-    export_mesh_to_ply("c-alpha.ply", m1)
+    # sphere_radius = 0.05
+    # sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))
+    # spheres = map(a -> Translate(Float32.(a)...)((sphere_mesh)), c_alphas)
+    # spheres = map(s -> ColoredMesh(s, (0, 0, 0)), spheres)
+    # m1 = reduce(merge, spheres)
+    # export_mesh_to_ply("c-alpha.ply", m1)
 
     return c_alphas, point_to_residue_indices
 end
@@ -27,8 +27,9 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
     point_to_residue_indices = []
     for (i, fragment) in enumerate(fragments(chain))
         if(is_amino_acid(fragment.name))
-            ca = filter(x -> x.element==Elements.C && x.name=="CA", atoms(fragment))
-            ox = filter(x -> x.element==Elements.O && x.name=="O", atoms(fragment))
+            atom_list = atoms(fragment)
+            ca = filter(x -> x.element==Elements.C && x.name=="CA", atom_list)
+            ox = filter(x -> x.element==Elements.O && x.name=="O", atom_list)
             @assert length(ca)==1 && length(ox)==1
 
             push!(c_alphas, ca[1])
@@ -38,12 +39,12 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
         end
     end
 
-    sphere_radius = 0.05
-    sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))
-    spheres = map(a -> Translate(Float32.(a.r)...)((sphere_mesh)), c_alphas)
-    spheres = map(s -> ColoredMesh(s, (0, 0, 0)), spheres)
-    m1 = reduce(merge, spheres)
-    export_mesh_to_ply("c-alpha.ply", m1)
+    # sphere_radius = 0.05
+    # sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))
+    # spheres = map(a -> Translate(Float32.(a.r)...)((sphere_mesh)), c_alphas)
+    # spheres = map(s -> ColoredMesh(s, (0, 0, 0)), spheres)
+    # m1 = reduce(merge, spheres)
+    # export_mesh_to_ply("c-alpha.ply", m1)
 
     main_points = Matrix{Float64}(undef, 3, length(c_alphas)-1)
     minor_points = Matrix{Float64}(undef, 3, length(c_alphas)-1)
@@ -78,12 +79,12 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
             minor_points[:, i] = P-D
         end
     end
-    sphere_radius = 0.1
-    sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))
-    spheres = map(a -> Translate(Float32.(a)...)((sphere_mesh)), eachcol(main_points))
-    spheres = map(s -> ColoredMesh(s, (0, 0, 255)), spheres)
-    m1 = reduce(merge, spheres)
-    export_mesh_to_ply("main_points.ply", m1)
+    # sphere_radius = 0.1
+    # sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))
+    # spheres = map(a -> Translate(Float32.(a)...)((sphere_mesh)), eachcol(main_points))
+    # spheres = map(s -> ColoredMesh(s, (0, 0, 255)), spheres)
+    # m1 = reduce(merge, spheres)
+    # export_mesh_to_ply("main_points.ply", m1)
     return main_points, minor_points, point_to_residue_indices
 end
 

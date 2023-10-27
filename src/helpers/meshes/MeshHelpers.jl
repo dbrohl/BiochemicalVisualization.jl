@@ -170,26 +170,6 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
         if(prev_indices !== nothing)
             @assert length(current_indices)==length(prev_indices)
 
-            shift, flip = determine_offset(points[:, current_indices[1]], points[:, current_indices[2]], points[:, prev_indices])
-            if(shift!=0)
-                #prev_indices = circshift(prev_indices, -shift)
-                shiftSum += abs(shift)
-            end
-            if(flip)
-
-                log_info(circle_index_correction, "flip", shift, " ", flip, " ", prev_indices, " ", current_indices)
-                #colors[current_indices] = repeat([FLIP_COLOR], length(current_indices))
-                #reverse!(prev_indices)
-            end
-
-            # if(shift!=0 || flip)
-            #     color_count=10
-            # end
-            # if(color_count!=0)
-            #     color_count -= 1
-            #     colors[current_indices] = repeat([color_count==9 ? BACKGROUND_COLOR : FLIP_COLOR], length(current_indices))
-            # end
-
             connections[1, connection_i:connection_i+resolution-1] = current_indices'
             connections[2, connection_i:connection_i+resolution-1] = prev_indices'
             connections[3, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'

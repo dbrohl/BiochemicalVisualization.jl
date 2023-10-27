@@ -1,12 +1,12 @@
 mutable struct CatmullRom
     controlPointStrategy
-    controlPoints::AbstractMatrix # 3 rows, n cols
-    minorControlPoints::Union{AbstractMatrix, Nothing}
+    controlPoints::Matrix # 3 rows, n cols
+    minorControlPoints::Union{Matrix, Nothing}
 
-    point_to_residue_indices::AbstractVector
+    point_to_residue_indices::Vector
 
-    num_points_per_resolution::Dict{Int, AbstractVector}
-    sample_mapping_per_resolution::Dict{Int, AbstractVector}
+    num_points_per_resolution::Dict{Int, Vector}
+    sample_mapping_per_resolution::Dict{Int, Vector}
 
     function CatmullRom(chain::BiochemicalAlgorithms.Chain, control_point_strategy)
         if(control_point_strategy==ControlPoints.C_ALPHA)

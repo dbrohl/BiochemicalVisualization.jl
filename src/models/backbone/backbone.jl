@@ -70,6 +70,7 @@ function prepare_backbone_model(
 
     chain_meshes::Vector{PlainMesh{U}} = []
     for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
+        fragment_list = fragments(chain)
         # TODO zu kurze chains abfangen
 
         # construct spline
@@ -94,13 +95,13 @@ function prepare_backbone_model(
             q, r, s = frames_from_two_splines(spline_points, velocities, second_spline_points)
 
 
-            sphere_radius = 0.2
-            sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
-            debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 200, 200)), eachcol(spline_points)))
-            export_mesh_to_ply("main_points_new.ply", debug_mesh)
+            # sphere_radius = 0.2
+            # sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
+            # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 200, 200)), eachcol(spline_points)))
+            # export_mesh_to_ply("main_points_new.ply", debug_mesh)
 
-            debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 0, 0)), eachcol(second_spline_points)))
-            export_mesh_to_ply("outer_points_new.ply", debug_mesh)
+            # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 0, 0)), eachcol(second_spline_points)))
+            # export_mesh_to_ply("outer_points_new.ply", debug_mesh)
         end
 
         if(config.color==Color.RAINBOW)
@@ -111,18 +112,18 @@ function prepare_backbone_model(
 
         if(config.backbone_type==BackboneType.CARTOON)
             # determine orientation of looping (arrows point towards carboxyl-end)
-            if((Symbol(:N_TERMINAL) ∈ fragments(chain)[1].flags) 
-                && (Symbol(:C_TERMINAL) ∈ fragments(chain)[end].flags))
+            if((Symbol(:N_TERMINAL) ∈ fragment_list[1].flags) 
+                && (Symbol(:C_TERMINAL) ∈ fragment_list[end].flags))
                 n_to_c = true
-            elseif((Symbol(:N_TERMINAL) ∈ fragments(chain)[end].flags) 
-                && (Symbol(:C_TERMINAL) ∈ fragments(chain)[1].flags))
+            elseif((Symbol(:N_TERMINAL) ∈ fragment_list[end].flags) 
+                && (Symbol(:C_TERMINAL) ∈ fragment_list[1].flags))
                 n_to_c = false
             else
                 throw(ErrorException("c and n terminal are not included in flags"))
             end
             
             # for each sheet: find the end and save the index
-            fragment_indices = collect(1:nfragments(chain))
+            fragment_indices = collect(1:length(fragment_list))
             if(!n_to_c)
                 reverse!(fragment_indices)
             end
@@ -130,7 +131,7 @@ function prepare_backbone_model(
             prev_ss = nothing
             arrow_fragment_indices = []
             for i in fragment_indices
-                current_ss = fragments(chain)[i].properties[:SS]
+                current_ss = fragment_list[i].properties[:SS]
                 if(prev_ss!==nothing)
                     if(n_to_c 
                         && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET 
@@ -184,7 +185,7 @@ function prepare_backbone_model(
             fixed_indices = [1, size(spline_points, 2)] # begin and end cannot be dropped
             if(config.backbone_type==BackboneType.CARTOON || config.color==Color.SECONDARY_STRUCTURE || config.color==Color.RESIDUE)
                 prev_res_idx = sample_to_residue_indices[1]
-                prev_ss = fragments(chain)[sample_to_residue_indices[1]].properties[:SS]
+                prev_ss = fragment_list[sample_to_residue_indices[1]].properties[:SS]
                 for (i, resIdx) in enumerate(sample_to_residue_indices)
 
                     if(config.backbone_type==BackboneType.CARTOON && (resIdx ∈ arrow_fragment_indices))
@@ -192,7 +193,7 @@ function prepare_backbone_model(
                     end
 
                     if(resIdx!=prev_res_idx)
-                        residue = fragments(chain)[resIdx]
+                        residue = fragment_list[resIdx]
                         if(config.color==Color.RESIDUE)
                             push!(fixed_indices, i-1, i) # Color changes at residue boundaries. The color should not be interpolated over a larger distance.
                         end
@@ -208,6 +209,7 @@ function prepare_backbone_model(
             sort!(fixed_indices)
             unique!(fixed_indices)
 
+            local remaining_indices::Vector{Int}
             if(config.color==Color.RAINBOW)
                 remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
             else
@@ -230,9 +232,9 @@ function prepare_backbone_model(
 
         circles::Vector{PlainNonStdMesh{U}} = []
 
-        framesA::Vector{ColoredMesh} = []
-        framesB::Vector{ColoredMesh} = []
-        push!(framesB, local_frame_mesh(spline_points[:, 1], q[:, 1], r[:, 1], s[:, 1]))
+        # framesA::Vector{ColoredMesh} = []
+        # framesB::Vector{ColoredMesh} = []
+        # push!(framesB, local_frame_mesh(spline_points[:, 1], q[:, 1], r[:, 1], s[:, 1]))
 
         # iterate and create vertices
         for current_index=axes(spline_points, 2) # start- and endcap bases are the first and last splinepoints #TODO offset wieder auf 2, wenn Endkappen wieder funktionieren
@@ -243,8 +245,8 @@ function prepare_backbone_model(
             end
 
             # debug output
-            frameA = local_frame_mesh(spline_points[:, current_index], q[:, current_index], r[:, current_index], s[:, current_index])
-            push!(framesA, frameA)
+            # frameA = local_frame_mesh(spline_points[:, current_index], q[:, current_index], r[:, current_index], s[:, current_index])
+            # push!(framesA, frameA)
 
             # generate cross-section
             if(config.backbone_type==BackboneType.BACKBONE)
@@ -252,7 +254,7 @@ function prepare_backbone_model(
             elseif(config.backbone_type==BackboneType.RIBBON)
                 circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius, config.stick_radius)
             elseif(config.backbone_type==BackboneType.CARTOON)
-                residue = fragments(chain)[sample_to_residue_indices[current_index]]
+                residue = fragment_list[sample_to_residue_indices[current_index]]
                 structure = residue.properties[:SS]
                 if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
                     circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, config.stick_radius)
@@ -272,10 +274,10 @@ function prepare_backbone_model(
             elseif(config.color==Color.RAINBOW)
                 color!(circle, rainbow_colors[current_index])
             elseif(config.color==Color.SECONDARY_STRUCTURE)
-                residue = fragments(chain)[sample_to_residue_indices[current_index]]
+                residue = fragment_list[sample_to_residue_indices[current_index]]
                 color!(circle, structure_color_mapping[residue.properties[:SS]])
             elseif(config.color==Color.RESIDUE)
-                residue = fragments(chain)[sample_to_residue_indices[current_index]]
+                residue = fragment_list[sample_to_residue_indices[current_index]]
                 color!(circle, amino_acid_color_mapping[residue.name])
             end
 
@@ -292,11 +294,11 @@ function prepare_backbone_model(
         # cs = merge_multiple_meshes(circle_meshes)
         # export_mesh_representation_to_ply("circles.ply", Representation(cs))
 
-        fs = reduce(merge, framesA)
-        export_mesh_to_ply("framesA.ply", fs)
+        # fs = reduce(merge, framesA)
+        # export_mesh_to_ply("framesA.ply", fs)
 
-        fs = reduce(merge, framesB)
-        export_mesh_to_ply("framesB.ply", fs)
+        # fs = reduce(merge, framesB)
+        # export_mesh_to_ply("framesB.ply", fs)
 
         # ----- add hemispheres to both ends -----
 

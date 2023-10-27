@@ -1,5 +1,5 @@
 mutable struct PlainNonStdMesh{T}
-    vertices::AbstractMatrix{T} # 3 rows, n cols
+    vertices::Matrix{T} # 3 rows, n cols
     connections::Vector{Vector{Int}} # (supports m-gons instead of only triangles)
     colors::Vector{NTuple{3, Int}}
 end

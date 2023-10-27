@@ -1,6 +1,6 @@
 mutable struct PlainMesh{T}
-    vertices::AbstractMatrix{T} # 3 rows, n cols
-    connections::AbstractMatrix{Int} # 3 rows, m cols, represents triangles
+    vertices::Matrix{T} # 3 rows, n cols
+    connections::Matrix{Int} # 3 rows, m cols, represents triangles
     colors::Vector{NTuple{3, Int}}
 end
 

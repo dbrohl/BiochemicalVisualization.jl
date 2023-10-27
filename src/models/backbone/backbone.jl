@@ -109,21 +109,96 @@ function prepare_backbone_model(
             rainbow_colors = map(rgb->map(channel->Int(floor(channel*255)), (rgb.r, rgb.g, rgb.b)), rgb_colors)
         end
 
+        if(config.backbone_type==BackboneType.CARTOON)
+            # determine orientation of looping (arrows point towards carboxyl-end)
+            if((Symbol(:N_TERMINAL) ∈ fragments(chain)[1].flags) 
+                && (Symbol(:C_TERMINAL) ∈ fragments(chain)[end].flags))
+                n_to_c = true
+            elseif((Symbol(:N_TERMINAL) ∈ fragments(chain)[end].flags) 
+                && (Symbol(:C_TERMINAL) ∈ fragments(chain)[1].flags))
+                n_to_c = false
+            else
+                throw(ErrorException("c and n terminal are not included in flags"))
+            end
+            
+            # for each sheet: find the end and save the index
+            fragment_indices = collect(1:nfragments(chain))
+            if(!n_to_c)
+                reverse!(fragment_indices)
+            end
+            prev_i = nothing
+            prev_ss = nothing
+            arrow_fragment_indices = []
+            for i in fragment_indices
+                current_ss = fragments(chain)[i].properties[:SS]
+                if(prev_ss!==nothing)
+                    if(n_to_c 
+                        && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET 
+                        && current_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET)
+                        push!(arrow_fragment_indices, prev_i)
+                    end
+
+                    if(!n_to_c 
+                        && prev_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET 
+                        && current_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)
+                        push!(arrow_fragment_indices, i)
+                    end
+                end
+                prev_i = i
+                prev_ss = current_ss
+            end
+
+            # find corresponding frames and store the resulting width of the rectangle at that frame
+            rectangle_widths=[]
+            current_count = 0
+            current_index = sample_to_residue_indices[1]
+            for (i, resIdx) in enumerate(sample_to_residue_indices)
+                if(resIdx!=current_index || i==length(sample_to_residue_indices))
+                    if(i==length(sample_to_residue_indices))
+                        current_count += 1
+                    end
+                    if(current_index ∈ arrow_fragment_indices)
+                        num_uniform = Int(round(current_count/3))
+                        num_arrow = current_count - num_uniform
+                        uniforms = repeat([1], num_uniform)
+                        arrow = collect(range(1.5, 0, num_arrow))
+                        if(n_to_c)
+                            append!(rectangle_widths, uniforms, arrow)
+                        else
+                            append!(rectangle_widths, reverse!(arrow), uniforms)
+                        end
+                    else
+                        append!(rectangle_widths, repeat([1], current_count))
+                    end
+
+                    current_count = 0
+                    current_index = resIdx
+                end
+                current_count += 1
+            end
+        end
+
         # filter
         if(config.filter==Filter.ANGLE)
-            fixed_indices = [1, size(spline_points, 2)]
+            # create a list of points that are fixed and connot be removed by the filter
+            fixed_indices = [1, size(spline_points, 2)] # begin and end cannot be dropped
             if(config.backbone_type==BackboneType.CARTOON || config.color==Color.SECONDARY_STRUCTURE || config.color==Color.RESIDUE)
                 prev_res_idx = sample_to_residue_indices[1]
                 prev_ss = fragments(chain)[sample_to_residue_indices[1]].properties[:SS]
                 for (i, resIdx) in enumerate(sample_to_residue_indices)
+
+                    if(config.backbone_type==BackboneType.CARTOON && (resIdx ∈ arrow_fragment_indices))
+                        push!(fixed_indices, i) # keep sections where arrows are created in the geometry
+                    end
+
                     if(resIdx!=prev_res_idx)
                         residue = fragments(chain)[resIdx]
                         if(config.color==Color.RESIDUE)
-                            push!(fixed_indices, i-1, i)
+                            push!(fixed_indices, i-1, i) # Color changes at residue boundaries. The color should not be interpolated over a larger distance.
                         end
                         if((config.backbone_type==BackboneType.CARTOON || config.color==Color.SECONDARY_STRUCTURE)
                             && residue.properties[:SS]!=prev_ss)
-                            push!(fixed_indices, i-1, i)
+                            push!(fixed_indices, i-1, i) # Color or cross section changes at secondary structure changes. 
                             prev_ss = residue.properties[:SS]
                         end
                         prev_res_idx = resIdx
@@ -134,7 +209,7 @@ function prepare_backbone_model(
             unique!(fixed_indices)
 
             if(config.color==Color.RAINBOW)
-                remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices, rainbow_colors)
+                remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
             else
                 remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices)
             end
@@ -144,6 +219,7 @@ function prepare_backbone_model(
             q = q[:, remaining_indices]
             r = r[:, remaining_indices]
             s = s[:, remaining_indices]
+            rectangle_widths = rectangle_widths[remaining_indices]
             if(config.color==Color.RAINBOW)
                 rainbow_colors = rainbow_colors[remaining_indices]
             end
@@ -182,12 +258,12 @@ function prepare_backbone_model(
                     circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, config.stick_radius)
                 elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
                     circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
-                elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET) # TODO arrows
-                    circle_points = create_rectangle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius, T(0.5)*config.stick_radius)
+                elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
+                    circle_points = create_rectangle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius * T(rectangle_widths[current_index]), T(0.5)*config.stick_radius)
                 end
             end
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
-            #TODO extra geometry at SS boundaries?
+            #TODO extra geometry at SS and arrow boundaries?
             
             if(config.color==Color.UNIFORM)
                 color!(circle, uniform_color)

@@ -42,7 +42,7 @@ end
 
 function calculate_points(spline::CatmullRom, resolution)
     dict_key = Int(round(resolution*1000))
-    return evaluate_generic_quadruple_spline(spline.controlPoints, num_points(spline, resolution), compute_catmull_rom_quadruple), spline.sample_mapping_per_resolution[dict_key]
+    return evaluate_generic_quadruple_spline(spline.controlPoints, num_points(spline, resolution), compute_catmull_rom_quadruple), sample_to_fragment_index_mapping(spline, resolution)
 end
 
 function calculate_velocities(spline::CatmullRom, resolution)

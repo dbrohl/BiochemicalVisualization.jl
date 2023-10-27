@@ -87,45 +87,57 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
     return main_points, minor_points, point_to_residue_indices
 end
 
-function num_points(spline, resolution)
-    dict_key = Int(round(resolution*1000))
-    if(dict_key ∈ keys(spline.num_points_per_resolution))
-        return spline.num_points_per_resolution[dict_key]
-    else
-        num_points = []
-        sample_mapping = []
-        i = 1
-        while i+3 <= size(spline.controlPoints, 2)
-            distance = norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
-            push!(num_points, max(2, convert(Int, ceil(resolution * 1 * distance)))) #TODO factor
+function calculate_resolution_dependent_data(spline, resolution)
+    num_points = []
+    sample_mapping = []
+    i = 1
+    while i+3 <= size(spline.controlPoints, 2)
+        distance = norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
+        push!(num_points, max(2, convert(Int, ceil(resolution * 1 * distance)))) #TODO factor
 
-            if(spline.controlPointStrategy==ControlPoints.C_ALPHA)
-                first_half_num = num_points[end] ÷ 2
-                second_half_num = num_points[end]-first_half_num
-                if(i+3!=size(spline.controlPoints, 2))
-                    second_half_num -= 1
-                end
-
-                push!(sample_mapping, 
-                        repeat([spline.point_to_residue_indices[i+1]], first_half_num)..., 
-                        repeat([spline.point_to_residue_indices[i+2]], second_half_num)...)
-            elseif(spline.controlPointStrategy==ControlPoints.MID_POINTS)
-                repeats = num_points[end]
-                if(i+3!=size(spline.controlPoints, 2))
-                    repeats -= 1
-                end
-
-                push!(sample_mapping, 
-                        repeat([spline.point_to_residue_indices[i+2]], repeats)...)
-                
+        if(spline.controlPointStrategy==ControlPoints.C_ALPHA)
+            first_half_num = num_points[end] ÷ 2
+            second_half_num = num_points[end]-first_half_num
+            if(i+3!=size(spline.controlPoints, 2))
+                second_half_num -= 1
             end
-            i += 1
+
+            push!(sample_mapping, 
+                    repeat([spline.point_to_residue_indices[i+1]], first_half_num)..., 
+                    repeat([spline.point_to_residue_indices[i+2]], second_half_num)...)
+        elseif(spline.controlPointStrategy==ControlPoints.MID_POINTS)
+            repeats = num_points[end]
+            if(i+3!=size(spline.controlPoints, 2))
+                repeats -= 1
+            end
+
+            push!(sample_mapping, 
+                    repeat([spline.point_to_residue_indices[i+2]], repeats)...)
             
         end
-        spline.num_points_per_resolution[dict_key] = num_points
-        spline.sample_mapping_per_resolution[dict_key] = sample_mapping
-        return num_points
+        i += 1
+        
     end
+
+    dict_key = Int(round(resolution*1000))
+    spline.num_points_per_resolution[dict_key] = num_points
+    spline.sample_mapping_per_resolution[dict_key] = sample_mapping
+end
+
+function num_points(spline, resolution)
+    dict_key = Int(round(resolution*1000))
+    if(dict_key ∉ keys(spline.num_points_per_resolution))
+        calculate_resolution_dependent_data(spline, resolution)
+    end
+    return spline.num_points_per_resolution[dict_key]
+end
+
+function sample_to_fragment_index_mapping(spline, resolution)
+    dict_key = Int(round(resolution*1000))
+    if(dict_key ∉ keys(spline.sample_mapping_per_resolution))
+        calculate_resolution_dependent_data(spline, resolution)
+    end
+    return spline.sample_mapping_per_resolution[dict_key]
 end
 
 function evaluate_generic_quadruple_spline(control_points, num_points, fn)

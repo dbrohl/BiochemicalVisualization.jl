@@ -36,10 +36,17 @@ function circlesToSimpleMesh(circles)
 
 end
 
-
+default_config = BackboneConfig(0.2, 
+12, 
+BackboneType.CARTOON, 
+Color.SECONDARY_STRUCTURE, 
+Spline.CUBIC_B, 
+ControlPoints.MID_POINTS, 
+Frame.SECOND_SPLINE, 
+Filter.ANGLE)
 
 function prepare_backbone_model(
-    ac::AbstractAtomContainer{T}, config::BackboneConfig) where {T<:Real}
+    ac::AbstractAtomContainer{T}, config::BackboneConfig=default_config) where {T<:Real}
 
     start_time = now()
     U = Float64
@@ -111,15 +118,16 @@ function prepare_backbone_model(
         end
 
         if(config.backbone_type==BackboneType.CARTOON)
+            filtered_fragment_list = filter(f -> is_amino_acid(f), fragment_list)
             # determine orientation of looping (arrows point towards carboxyl-end)
-            if((Symbol(:N_TERMINAL) ∈ fragment_list[1].flags) 
-                && (Symbol(:C_TERMINAL) ∈ fragment_list[end].flags))
+            if((Symbol(:N_TERMINAL) ∈ filtered_fragment_list[1].flags) 
+                && (Symbol(:C_TERMINAL) ∈ filtered_fragment_list[end].flags))
                 n_to_c = true
-            elseif((Symbol(:N_TERMINAL) ∈ fragment_list[end].flags) 
-                && (Symbol(:C_TERMINAL) ∈ fragment_list[1].flags))
+            elseif((Symbol(:N_TERMINAL) ∈ filtered_fragment_list[end].flags) 
+                && (Symbol(:C_TERMINAL) ∈ filtered_fragment_list[1].flags))
                 n_to_c = false
             else
-                throw(ErrorException("c and n terminal are not included in flags"))
+                throw(ErrorException("c and n terminal are not included in flags (chain $chain_num)"))
             end
             
             # for each sheet: find the end and save the index

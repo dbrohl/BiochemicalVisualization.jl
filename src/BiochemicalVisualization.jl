@@ -51,6 +51,7 @@ include("helpers/meshes/MeshHelpers.jl")
 include("helpers/gpu_rotation_test.jl")
 include("helpers/utils.jl")
 include("helpers/point_filter.jl")
+include("helpers/color_maps.jl")
 
 include("core/representation.jl")
 include("core/visualize.jl")

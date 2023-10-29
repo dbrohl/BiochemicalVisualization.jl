@@ -1,40 +1,4 @@
-export rotation_test, prepare_backbone_model
-
-
-FLIP_COLOR::NTuple{3, Int} = (200, 200, 200)
-BREAK_COLOR::NTuple{3, Int} = (255, 0, 0)
-COUNT_COLOR_START::NTuple{3, Int} = (255, 0, 255)
-COUNT_COLOR_0::NTuple{3, Int} = (0, 0, 255)
-COUNT_COLOR_1::NTuple{3, Int} = (0, 255, 255)
-BACKGROUND_COLOR::NTuple{3, Int} = (60, 60, 60)
-
-structure_color_mapping = Dict(
-    BiochemicalAlgorithms.SecondaryStructure.NONE => (255, 255, 255), 
-    BiochemicalAlgorithms.SecondaryStructure.HELIX => (255, 75, 120), 
-    BiochemicalAlgorithms.SecondaryStructure.SHEET => (255, 150, 0))
-
-amino_acid_color_mapping = Dict()
-for ((aa, aa_three_letters, aa_one_letter), color) in zip(values(BiochemicalAlgorithms.AminoAcidProperties), distinguishable_colors(length(AminoAcidProperties)))
-    amino_acid_color_mapping[aa_three_letters] = map(channel->Int(channel*255), (color.r, color.g, color.b))
-end
-
-
-function circlesToSimpleMesh(circles)
-    verts = hcat(map(c->c.vertices, circles)...)
-    verts = [Point3(p...) for p in eachcol(verts)]
-
-    i=0
-    connects::Vector{Connectivity} = []
-    for c in circles
-        for connection in c.connections
-            push!(connects, connect(Tuple(connection .+ i)))
-        end
-        i+=size(c.vertices, 2)
-    end
-
-    return SimpleMesh(verts, connects)
-
-end
+export prepare_backbone_model
 
 default_config = BackboneConfig(0.2, 
 12, 
@@ -73,6 +37,10 @@ function prepare_backbone_model(
         uniform_color = (255, 0, 0)
     elseif(config.color==Color.CHAIN)
         chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end])
+    elseif(config.color==Color.SECONDARY_STRUCTURE)
+        structure_color_mapping = get_structure_color_mapping()
+    elseif(config.color==Color.RESIDUE)
+        amino_acid_color_mapping = get_amino_acid_color_mapping()
     end
 
     chain_meshes::Vector{PlainMesh{U}} = []
@@ -274,7 +242,7 @@ function prepare_backbone_model(
             end
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
             #TODO extra geometry at SS and arrow boundaries?
-            
+
             if(config.color==Color.UNIFORM)
                 color!(circle, uniform_color)
             elseif(config.color==Color.CHAIN)
@@ -291,9 +259,6 @@ function prepare_backbone_model(
 
             push!(circles, circle)
         end
-
-        # m1 = circlesToSimpleMesh(circles)
-        # export_mesh_to_ply("circles.ply", m1)
 
         spline_mesh = connect_circles_to_tube(circles)
         log_info(types, "Type of spline mesh: ", typeof(spline_mesh))

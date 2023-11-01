@@ -9,6 +9,108 @@ ControlPoints.MID_POINTS,
 Frame.SECOND_SPLINE, 
 Filter.ANGLE)
 
+function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = nothing)
+    if(index<1 || index>size(spline_points, 2))
+        throw(ArgumentError("index has to be in [1, $(size(spline_points, 2))], but was $index"))
+    end
+    spline_points = hcat(spline_points[:, 1:index], spline_points[:, index], spline_points[:, index+1:end])
+    q = hcat(q[:, 1:index], q[:, index], q[:, index+1:end])
+    r = hcat(r[:, 1:index], r[:, index], r[:, index+1:end])
+    s = hcat(s[:, 1:index], s[:, index], s[:, index+1:end])
+    rectangle_widths = vcat(rectangle_widths[1:index], rectangle_widths[index], rectangle_widths[index+1:end])
+    sample_to_residue_indices = vcat(sample_to_residue_indices[1:index], sample_to_residue_indices[index], sample_to_residue_indices[index+1:end])
+    if(rainbow_colors !== nothing)
+        rainbow_colors = vcat(rainbow_colors[1:index], rainbow_colors[index], rainbow_colors[index+1:end])
+    end
+
+    return spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors
+end
+
+function compute_frame_widths(fragment_list, sample_to_residue_indices)
+    rectangle_widths = []
+    arrow_starts = []
+    arrow_frame_indices = []
+
+    filtered_fragment_list = filter(f -> is_amino_acid(f), fragment_list)
+    # determine orientation of looping (arrows point towards carboxyl-end) # TODO test if this works
+    if((Symbol(:N_TERMINAL) ∈ filtered_fragment_list[1].flags) 
+        && (Symbol(:C_TERMINAL) ∈ filtered_fragment_list[end].flags))
+        n_to_c = true
+    elseif((Symbol(:N_TERMINAL) ∈ filtered_fragment_list[end].flags) 
+        && (Symbol(:C_TERMINAL) ∈ filtered_fragment_list[1].flags))
+        n_to_c = false
+    else
+        throw(ErrorException("c and n terminal are not included in flags (chain $chain_num)"))
+    end
+    
+    # for each sheet: find the end and save the index
+    fragment_indices = collect(1:length(fragment_list))
+    if(!n_to_c)
+        reverse!(fragment_indices)
+    end
+    prev_i = nothing
+    prev_ss = nothing
+    arrow_fragment_indices = []
+    for i in fragment_indices
+        current_ss = fragment_list[i].properties[:SS]
+        if(prev_ss!==nothing)
+            if(n_to_c 
+                && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET 
+                && current_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET)
+                push!(arrow_fragment_indices, prev_i)
+            end
+
+            if(!n_to_c 
+                && prev_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET 
+                && current_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)
+                push!(arrow_fragment_indices, i)
+            end
+        end
+        prev_i = i
+        prev_ss = current_ss
+    end
+
+    # find corresponding frames and store the resulting width of the rectangle at that frame
+    frames_in_residue_count = 0
+    prev_res_idx = sample_to_residue_indices[1]
+
+    a = 1
+    while(a<=length(sample_to_residue_indices))
+        res_idx = sample_to_residue_indices[a]
+        if(res_idx!=prev_res_idx || a==length(sample_to_residue_indices)) # end of the previous residue
+            if(a==length(sample_to_residue_indices))
+                frames_in_residue_count += 1
+            end
+            if(prev_res_idx ∈ arrow_fragment_indices)
+                num_uniform = Int(round(frames_in_residue_count/3))
+                num_arrow = frames_in_residue_count - num_uniform
+                uniforms = repeat([1], num_uniform)
+                arrow = collect(range(1.5, 0, num_arrow))
+                if(n_to_c)
+                    append!(arrow_frame_indices, length(rectangle_widths)+num_uniform:length(rectangle_widths)+num_uniform+num_arrow)
+                    append!(rectangle_widths, uniforms, arrow)
+                else
+                    append!(arrow_frame_indices, length(rectangle_widths)+1:length(rectangle_widths)+num_arrow+1)
+                    append!(rectangle_widths, reverse!(arrow), uniforms)
+                end
+                
+                # add geometry between uniform and arrow part
+                push!(arrow_starts, length(rectangle_widths)-num_arrow+1)
+            else
+                append!(rectangle_widths, repeat([1], frames_in_residue_count))
+            end
+
+            # start new residue
+            frames_in_residue_count = 0
+            prev_res_idx = res_idx
+        end
+        frames_in_residue_count += 1
+        a += 1
+    end
+
+    return rectangle_widths, arrow_starts, arrow_frame_indices
+end
+
 function prepare_backbone_model(
     ac::AbstractAtomContainer{T}, config::BackboneConfig=default_config) where {T<:Real}
 
@@ -45,6 +147,7 @@ function prepare_backbone_model(
 
     chain_meshes::Vector{PlainMesh{U}} = []
     for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
+        println()
         fragment_list = fragments(chain)
         # TODO zu kurze chains abfangen
 
@@ -85,88 +188,53 @@ function prepare_backbone_model(
             rainbow_colors = map(rgb->map(channel->Int(floor(channel*255)), (rgb.r, rgb.g, rgb.b)), rgb_colors)
         end
 
+        fixed_indices = [] # collection of all frames that should not be removed by filtering
+
+        # preparation for arrows
         if(config.backbone_type==BackboneType.CARTOON)
-            filtered_fragment_list = filter(f -> is_amino_acid(f), fragment_list)
-            # determine orientation of looping (arrows point towards carboxyl-end)
-            if((Symbol(:N_TERMINAL) ∈ filtered_fragment_list[1].flags) 
-                && (Symbol(:C_TERMINAL) ∈ filtered_fragment_list[end].flags))
-                n_to_c = true
-            elseif((Symbol(:N_TERMINAL) ∈ filtered_fragment_list[end].flags) 
-                && (Symbol(:C_TERMINAL) ∈ filtered_fragment_list[1].flags))
-                n_to_c = false
-            else
-                throw(ErrorException("c and n terminal are not included in flags (chain $chain_num)"))
-            end
-            
-            # for each sheet: find the end and save the index
-            fragment_indices = collect(1:length(fragment_list))
-            if(!n_to_c)
-                reverse!(fragment_indices)
-            end
-            prev_i = nothing
-            prev_ss = nothing
-            arrow_fragment_indices = []
-            for i in fragment_indices
-                current_ss = fragment_list[i].properties[:SS]
-                if(prev_ss!==nothing)
-                    if(n_to_c 
-                        && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET 
-                        && current_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                        push!(arrow_fragment_indices, prev_i)
-                    end
+            rectangle_widths, arrow_starts, arrow_frame_indices = compute_frame_widths(fragment_list, sample_to_residue_indices)
+            append!(fixed_indices, arrow_frame_indices)
+            sort!(fixed_indices)
 
-                    if(!n_to_c 
-                        && prev_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET 
-                        && current_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                        push!(arrow_fragment_indices, i)
-                    end
-                end
-                prev_i = i
-                prev_ss = current_ss
-            end
+            for i=eachindex(arrow_starts)
+                spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(arrow_starts[i], spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                rectangle_widths[arrow_starts[i]] = 1.0
 
-            # find corresponding frames and store the resulting width of the rectangle at that frame
-            rectangle_widths=[]
-            current_count = 0
-            current_index = sample_to_residue_indices[1]
-            for (i, resIdx) in enumerate(sample_to_residue_indices)
-                if(resIdx!=current_index || i==length(sample_to_residue_indices))
-                    if(i==length(sample_to_residue_indices))
-                        current_count += 1
-                    end
-                    if(current_index ∈ arrow_fragment_indices)
-                        num_uniform = Int(round(current_count/3))
-                        num_arrow = current_count - num_uniform
-                        uniforms = repeat([1], num_uniform)
-                        arrow = collect(range(1.5, 0, num_arrow))
-                        if(n_to_c)
-                            append!(rectangle_widths, uniforms, arrow)
-                        else
-                            append!(rectangle_widths, reverse!(arrow), uniforms)
+                # adjust indices after the insertion site
+                a = 1
+                inserted = false
+                while a<length(fixed_indices)
+                    if(fixed_indices[a]>=arrow_starts[i])
+                        if(!inserted)
+                            insert!(fixed_indices, a, arrow_starts[i])
+                            inserted = true
+                            a += 1
                         end
-                    else
-                        append!(rectangle_widths, repeat([1], current_count))
+                        fixed_indices[a] += 1
                     end
-
-                    current_count = 0
-                    current_index = resIdx
+                    a += 1
                 end
-                current_count += 1
+
+                for j=eachindex(arrow_starts)
+                    if(arrow_starts[j]> arrow_starts[i])
+                        arrow_starts[j] += 1
+                    end
+                end
             end
         end
 
+        # TODO add frames when secondary structure changes
+
+
         # filter
         if(config.filter==Filter.ANGLE)
-            # create a list of points that are fixed and connot be removed by the filter
-            fixed_indices = [1, size(spline_points, 2)] # begin and end cannot be dropped
+            # create a list of points that are fixed and cannot be removed by the filter # TODO in 2lwq, one sheet has a too short residue coloring
+            push!(fixed_indices, 1, size(spline_points, 2)) # begin and end cannot be dropped
             if(config.backbone_type==BackboneType.CARTOON || config.color==Color.SECONDARY_STRUCTURE || config.color==Color.RESIDUE)
                 prev_res_idx = sample_to_residue_indices[1]
                 prev_ss = fragment_list[sample_to_residue_indices[1]].properties[:SS]
                 for (i, resIdx) in enumerate(sample_to_residue_indices)
 
-                    if(config.backbone_type==BackboneType.CARTOON && (resIdx ∈ arrow_fragment_indices))
-                        push!(fixed_indices, i) # keep sections where arrows are created in the geometry
-                    end
 
                     if(resIdx!=prev_res_idx)
                         residue = fragment_list[resIdx]

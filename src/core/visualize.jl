@@ -214,7 +214,7 @@ function backbone(ac; path="BALL_export_backbone.ply", config=nothing)
 		config = BackboneConfig(0.2, 
 		12, 
 		BackboneType.CARTOON, 
-		Color.SECONDARY_STRUCTURE, 
+		Color.RESIDUE, 
 		Spline.CUBIC_B, 
 		ControlPoints.MID_POINTS, 
 		Frame.SECOND_SPLINE, 

@@ -10,4 +10,5 @@ function get_amino_acid_color_mapping()
     for ((aa, aa_three_letters, aa_one_letter), color) in zip(values(BiochemicalAlgorithms.AminoAcidProperties), distinguishable_colors(length(AminoAcidProperties)))
         result[aa_three_letters] = map(channel->Int(channel*255), (color.r, color.g, color.b))
     end
+    return result
 end

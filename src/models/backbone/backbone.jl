@@ -29,7 +29,7 @@ end
 #assumes sorted index_array!
 function adjust_indices!(index_array, threshold)
     for i=eachindex(index_array)
-        if(index_array[i]>threshold)
+        if(index_array[i]>=threshold)
             index_array[i] += 1
         end
     end
@@ -51,6 +51,7 @@ function compute_frame_widths(fragment_list, sample_to_residue_indices)
     else
         throw(ErrorException("c and n terminal are not included in flags (chain $chain_num)"))
     end
+    log_info(misc, "n_to_c: $n_to_c")
     
     # for each sheet: find the end and save the index
     fragment_indices = collect(1:length(fragment_list))
@@ -158,7 +159,7 @@ function prepare_backbone_model(
     for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
         println()
         fragment_list = fragments(chain)
-        # TODO zu kurze chains abfangen
+        # TODO zu kurze chains abfangen, chains ohne c_alphas
 
         # construct spline
         if(config.spline==Spline.CATMULL_ROM)
@@ -206,7 +207,8 @@ function prepare_backbone_model(
             sort!(fixed_indices)
 
             for i=eachindex(arrow_starts)
-                spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(arrow_starts[i], spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                insertion_idx = arrow_starts[i]
+                spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
                 rectangle_widths[arrow_starts[i]] = 1.0
 
                 # adjust indices after the insertion site
@@ -214,9 +216,11 @@ function prepare_backbone_model(
                 adjust_indices!(arrow_starts, arrow_starts[i])
 
                 # newly inserted frame should not be removed by filtering
-                index = searchsortedfirst(fixed_indices, arrow_starts[i])
-                insert!(fixed_indices, index, arrow_starts[i])
+                index = searchsortedfirst(fixed_indices, insertion_idx)
+                insert!(fixed_indices, index, insertion_idx)
+
             end
+
         end
 
         # add frames when secondary structure changes # TODO what if n_to_c is false?
@@ -230,7 +234,6 @@ function prepare_backbone_model(
                     ss_a = fragment_list[prev_res_idx].properties[:SS]
                     ss_b = fragment_list[res_idx].properties[:SS]
                     small_to_large = ss_a==BiochemicalAlgorithms.SecondaryStructure.NONE || ss_a==BiochemicalAlgorithms.SecondaryStructure.SHEET
-                    log_info(extra_frames, "$ss_a -> $ss_b, small_to_large: $small_to_large")
 
                     if(small_to_large)
                         insertion_idx = a-1
@@ -242,8 +245,8 @@ function prepare_backbone_model(
                         frame_config[insertion_idx+1] = (fragment_list[prev_res_idx], fragment_list[res_idx])
                         frame_config[insertion_idx+2] = (fragment_list[res_idx], fragment_list[res_idx])
 
-                        adjust_indices!(fixed_indices, insertion_idx)
-                        adjust_indices!(fixed_indices, insertion_idx)
+                        adjust_indices!(fixed_indices, insertion_idx+1)
+                        adjust_indices!(fixed_indices, insertion_idx+1)
 
                         index = searchsortedfirst(fixed_indices, insertion_idx+1)
                         insert!(fixed_indices, index, insertion_idx+1)
@@ -267,7 +270,6 @@ function prepare_backbone_model(
                         
                     end
                     a+=2
-                    log_info(extra_frames)
                 
                 end
                 prev_res_idx = res_idx

@@ -46,6 +46,7 @@ end
 #     return remaining_indices
 # end
 
+# assumes at least 1 in fixed indices
 function filter_points_threshold(points, q, r, s, fixed_indices, colors=nothing)
     remaining_indices = []
     a = 0

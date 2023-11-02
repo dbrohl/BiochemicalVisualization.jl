@@ -26,6 +26,15 @@ function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to
     return spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors
 end
 
+#assumes sorted index_array!
+function adjust_indices!(index_array, threshold)
+    for i=eachindex(index_array)
+        if(index_array[i]>threshold)
+            index_array[i] += 1
+        end
+    end
+end
+
 function compute_frame_widths(fragment_list, sample_to_residue_indices)
     rectangle_widths = []
     arrow_starts = []
@@ -159,7 +168,7 @@ function prepare_backbone_model(
         end
 
         # sample along spline
-        spline_points::Matrix{U}, sample_to_residue_indices::Vector{Int} = calculate_points(spline, vertices_per_unit)
+        spline_points::Matrix{U}, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, vertices_per_unit)
         velocities::Matrix{U} = calculate_velocities(spline, vertices_per_unit)
         
         # construct local frames
@@ -201,53 +210,111 @@ function prepare_backbone_model(
                 rectangle_widths[arrow_starts[i]] = 1.0
 
                 # adjust indices after the insertion site
-                a = 1
-                inserted = false
-                while a<length(fixed_indices)
-                    if(fixed_indices[a]>=arrow_starts[i])
-                        if(!inserted)
-                            insert!(fixed_indices, a, arrow_starts[i])
-                            inserted = true
-                            a += 1
-                        end
-                        fixed_indices[a] += 1
-                    end
-                    a += 1
-                end
+                adjust_indices!(fixed_indices, arrow_starts[i])
+                adjust_indices!(arrow_starts, arrow_starts[i])
 
-                for j=eachindex(arrow_starts)
-                    if(arrow_starts[j]> arrow_starts[i])
-                        arrow_starts[j] += 1
-                    end
-                end
+                # newly inserted frame should not be removed by filtering
+                index = searchsortedfirst(fixed_indices, arrow_starts[i])
+                insert!(fixed_indices, index, arrow_starts[i])
             end
         end
 
-        # TODO add frames when secondary structure changes
+        # add frames when secondary structure changes # TODO what if n_to_c is false?
+        if(config.backbone_type==BackboneType.CARTOON)
+            frame_config = Dict()
+            prev_res_idx = sample_to_residue_indices[1]
+            a = 1
+            while(a<=length(sample_to_residue_indices))
+                res_idx = sample_to_residue_indices[a]
+                if(res_idx!=prev_res_idx && fragment_list[prev_res_idx].properties[:SS]!=fragment_list[res_idx].properties[:SS])
+                    ss_a = fragment_list[prev_res_idx].properties[:SS]
+                    ss_b = fragment_list[res_idx].properties[:SS]
+                    small_to_large = ss_a==BiochemicalAlgorithms.SecondaryStructure.NONE || ss_a==BiochemicalAlgorithms.SecondaryStructure.SHEET
+                    log_info(extra_frames, "$ss_a -> $ss_b, small_to_large: $small_to_large")
+
+                    if(small_to_large)
+                        insertion_idx = a-1
+                        spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                        spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                        sample_to_residue_indices[insertion_idx+1] = nothing
+                        sample_to_residue_indices[insertion_idx+2] = nothing
+                        
+                        frame_config[insertion_idx+1] = (fragment_list[prev_res_idx], fragment_list[res_idx])
+                        frame_config[insertion_idx+2] = (fragment_list[res_idx], fragment_list[res_idx])
+
+                        adjust_indices!(fixed_indices, insertion_idx)
+                        adjust_indices!(fixed_indices, insertion_idx)
+
+                        index = searchsortedfirst(fixed_indices, insertion_idx+1)
+                        insert!(fixed_indices, index, insertion_idx+1)
+                        insert!(fixed_indices, index+1, insertion_idx+2)
+                    else
+                        insertion_idx = a
+                        spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                        spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                        sample_to_residue_indices[insertion_idx] = nothing
+                        sample_to_residue_indices[insertion_idx+1] = nothing
+                        
+                        frame_config[insertion_idx] = (fragment_list[prev_res_idx], fragment_list[prev_res_idx])
+                        frame_config[insertion_idx+1] = (fragment_list[res_idx], fragment_list[prev_res_idx])
+
+                        adjust_indices!(fixed_indices, insertion_idx)
+                        adjust_indices!(fixed_indices, insertion_idx)
+
+                        index = searchsortedfirst(fixed_indices, insertion_idx)
+                        insert!(fixed_indices, index, insertion_idx)
+                        insert!(fixed_indices, index+1, insertion_idx+1)
+                        
+                    end
+                    a+=2
+                    log_info(extra_frames)
+                
+                end
+                prev_res_idx = res_idx
+                a+=1
+            end
+
+
+        end
 
 
         # filter
         if(config.filter==Filter.ANGLE)
             # create a list of points that are fixed and cannot be removed by the filter # TODO in 2lwq, one sheet has a too short residue coloring
-            push!(fixed_indices, 1, size(spline_points, 2)) # begin and end cannot be dropped
-            if(config.backbone_type==BackboneType.CARTOON || config.color==Color.SECONDARY_STRUCTURE || config.color==Color.RESIDUE)
+            insert!(fixed_indices, 1, 1) # begin and end cannot be dropped
+            push!(fixed_indices, size(spline_points, 2))
+
+            if(config.color==Color.SECONDARY_STRUCTURE && config.backbone_type!=BackboneType.CARTOON)
                 prev_res_idx = sample_to_residue_indices[1]
                 prev_ss = fragment_list[sample_to_residue_indices[1]].properties[:SS]
+                for (i, res_idx) in enumerate(sample_to_residue_indices)
+
+                    if(res_idx!=prev_res_idx && fragment_list[res_idx].properties[:SS]!=prev_ss)
+                        push!(fixed_indices, i-1, i) # Color changes at secondary structure changes. 
+                        prev_ss = fragment_list[res_idx].properties[:SS]
+                        prev_res_idx = res_idx
+                    end
+                end
+            end
+            if(config.color==Color.RESIDUE)
+                prev_res_idx = sample_to_residue_indices[1]
+                prev_ss = fragment_list[sample_to_residue_indices[1]].properties[:SS]
+
+                prev_was_nothing = false
                 for (i, resIdx) in enumerate(sample_to_residue_indices)
 
+                    if(resIdx===nothing)
+                        prev_was_nothing = true
+                        continue
+                    end
 
-                    if(resIdx!=prev_res_idx)
-                        residue = fragment_list[resIdx]
-                        if(config.color==Color.RESIDUE)
-                            push!(fixed_indices, i-1, i) # Color changes at residue boundaries. The color should not be interpolated over a larger distance.
-                        end
-                        if((config.backbone_type==BackboneType.CARTOON || config.color==Color.SECONDARY_STRUCTURE)
-                            && residue.properties[:SS]!=prev_ss)
-                            push!(fixed_indices, i-1, i) # Color or cross section changes at secondary structure changes. 
-                            prev_ss = residue.properties[:SS]
-                        end
+
+                    if(resIdx!=prev_res_idx && !prev_was_nothing)
+                        push!(fixed_indices, i-1, i) # Color changes at residue boundaries. The color should not be interpolated over a larger distance.
                         prev_res_idx = resIdx
                     end
+
+                    prev_was_nothing = false
                 end
             end
             sort!(fixed_indices)
@@ -259,16 +326,16 @@ function prepare_backbone_model(
             else
                 remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices)
             end
-            log_info(point_filter, "Remaining points: $(length(remaining_indices))/$(size(spline_points, 2))\n Filtered: $(size(spline_points, 2)-length(remaining_indices)) ($(length(fixed_indices)) fixed)")
-            spline_points = spline_points[:, remaining_indices]
-            sample_to_residue_indices = sample_to_residue_indices[remaining_indices]
-            q = q[:, remaining_indices]
-            r = r[:, remaining_indices]
-            s = s[:, remaining_indices]
-            rectangle_widths = rectangle_widths[remaining_indices]
-            if(config.color==Color.RAINBOW)
-                rainbow_colors = rainbow_colors[remaining_indices]
-            end
+            # log_info(point_filter, "Remaining points: $(length(remaining_indices))/$(size(spline_points, 2))\n Filtered: $(size(spline_points, 2)-length(remaining_indices)) ($(length(fixed_indices)) fixed)")
+            # spline_points = spline_points[:, remaining_indices]
+            # sample_to_residue_indices = sample_to_residue_indices[remaining_indices]
+            # q = q[:, remaining_indices]
+            # r = r[:, remaining_indices]
+            # s = s[:, remaining_indices]
+            # rectangle_widths = rectangle_widths[remaining_indices]
+            # if(config.color==Color.RAINBOW)
+            #     rainbow_colors = rainbow_colors[remaining_indices]
+            # end
         end
 
 
@@ -282,7 +349,9 @@ function prepare_backbone_model(
 
         # iterate and create vertices
         for current_index=axes(spline_points, 2) # start- and endcap bases are the first and last splinepoints #TODO offset wieder auf 2, wenn Endkappen wieder funktionieren
-
+            if(config.filter!=Filter.NONE && current_index ∉ remaining_indices)
+                continue
+            end
             # sanity check: frame should be orthogonal
             if(!approx_zero(dot(q[:, current_index], r[:, current_index])) || !approx_zero(dot(q[:, current_index], s[:, current_index])) || !approx_zero(dot(s[:, current_index], r[:, current_index])))
                 log_info(frame_rotation, current_index, " wrong angles ", dot(q[:, current_index], r[:, current_index]), " ", dot(q[:, current_index], s[:, current_index]), " ", dot(s[:, current_index], r[:, current_index]), " # ", q[:, current_index], " ", r[:, current_index], " ", s[:, current_index])
@@ -298,7 +367,11 @@ function prepare_backbone_model(
             elseif(config.backbone_type==BackboneType.RIBBON)
                 circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius, config.stick_radius)
             elseif(config.backbone_type==BackboneType.CARTOON)
-                residue = fragment_list[sample_to_residue_indices[current_index]]
+                if(sample_to_residue_indices[current_index]===nothing)
+                    residue = frame_config[current_index][1]
+                else
+                    residue = fragment_list[sample_to_residue_indices[current_index]]
+                end
                 structure = residue.properties[:SS]
                 if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
                     circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, config.stick_radius)
@@ -318,10 +391,19 @@ function prepare_backbone_model(
             elseif(config.color==Color.RAINBOW)
                 color!(circle, rainbow_colors[current_index])
             elseif(config.color==Color.SECONDARY_STRUCTURE)
-                residue = fragment_list[sample_to_residue_indices[current_index]]
-                color!(circle, structure_color_mapping[residue.properties[:SS]])
+                if(sample_to_residue_indices[current_index]===nothing)
+                    residue = frame_config[current_index][2]
+                else
+                    residue = fragment_list[sample_to_residue_indices[current_index]]
+                end
+                structure = residue.properties[:SS]
+                color!(circle, structure_color_mapping[structure])
             elseif(config.color==Color.RESIDUE)
-                residue = fragment_list[sample_to_residue_indices[current_index]]
+                if(sample_to_residue_indices[current_index]===nothing)
+                    residue = frame_config[current_index][2]
+                else
+                    residue = fragment_list[sample_to_residue_indices[current_index]]
+                end
                 color!(circle, amino_acid_color_mapping[residue.name])
             end
 

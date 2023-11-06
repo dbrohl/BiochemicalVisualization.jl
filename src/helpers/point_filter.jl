@@ -53,7 +53,7 @@ function filter_points_threshold(points, q, r, s, fixed_indices, colors=nothing)
     b = 0
     c = 0
 
-    degree_threshold = 10
+    degree_threshold = 5
     color_degree_threshold = 45
 
     for i=axes(points, 2)

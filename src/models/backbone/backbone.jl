@@ -9,6 +9,11 @@ ControlPoints.MID_POINTS,
 Frame.SECOND_SPLINE, 
 Filter.ANGLE)
 
+function insert_sorted!(array, elem)
+    index = searchsortedfirst(array, elem)
+    insert!(array, index, elem)
+end
+
 function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = nothing)
     if(index<1 || index>size(spline_points, 2))
         throw(ArgumentError("index has to be in [1, $(size(spline_points, 2))], but was $index"))
@@ -97,10 +102,10 @@ function compute_frame_widths(fragment_list, sample_to_residue_indices)
                 uniforms = repeat([1], num_uniform)
                 arrow = collect(range(1.5, 0, num_arrow))
                 if(n_to_c)
-                    append!(arrow_frame_indices, length(rectangle_widths)+num_uniform:length(rectangle_widths)+num_uniform+num_arrow)
+                    append!(arrow_frame_indices, length(rectangle_widths)+num_uniform+1:length(rectangle_widths)+num_uniform+num_arrow)
                     append!(rectangle_widths, uniforms, arrow)
                 else
-                    append!(arrow_frame_indices, length(rectangle_widths)+1:length(rectangle_widths)+num_arrow+1)
+                    append!(arrow_frame_indices, length(rectangle_widths)+1:length(rectangle_widths)+num_arrow)
                     append!(rectangle_widths, reverse!(arrow), uniforms)
                 end
                 
@@ -216,13 +221,13 @@ function prepare_backbone_model(
                 adjust_indices!(arrow_starts, arrow_starts[i])
 
                 # newly inserted frame should not be removed by filtering
-                index = searchsortedfirst(fixed_indices, insertion_idx)
-                insert!(fixed_indices, index, insertion_idx)
+                insert_sorted!(fixed_indices, insertion_idx)
 
             end
 
         end
 
+        log_info(extra_frames, "Fixed indices: ", fixed_indices)
         # add frames when secondary structure changes # TODO what if n_to_c is false?
         if(config.backbone_type==BackboneType.CARTOON)
             frame_config = Dict()
@@ -234,9 +239,11 @@ function prepare_backbone_model(
                     ss_a = fragment_list[prev_res_idx].properties[:SS]
                     ss_b = fragment_list[res_idx].properties[:SS]
                     small_to_large = ss_a==BiochemicalAlgorithms.SecondaryStructure.NONE || ss_a==BiochemicalAlgorithms.SecondaryStructure.SHEET
+                    #log_info(extra_frames, "$ss_a -> $ss_b, small_to_large: $small_to_large")
 
                     if(small_to_large)
                         insertion_idx = a-1
+                        #log_info(extra_frames, insertion_idx, fixed_indices)
                         spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
                         spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
                         sample_to_residue_indices[insertion_idx+1] = nothing
@@ -248,11 +255,13 @@ function prepare_backbone_model(
                         adjust_indices!(fixed_indices, insertion_idx+1)
                         adjust_indices!(fixed_indices, insertion_idx+1)
 
-                        index = searchsortedfirst(fixed_indices, insertion_idx+1)
-                        insert!(fixed_indices, index, insertion_idx+1)
-                        insert!(fixed_indices, index+1, insertion_idx+2)
+                        insert_sorted!(fixed_indices, insertion_idx)
+                        insert_sorted!(fixed_indices, insertion_idx+1)
+                        insert_sorted!(fixed_indices, insertion_idx+2)
+                        #log_info(extra_frames, insertion_idx, fixed_indices)
                     else
                         insertion_idx = a
+                        #log_info(extra_frames, insertion_idx, fixed_indices)
                         spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
                         spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
                         sample_to_residue_indices[insertion_idx] = nothing
@@ -264,12 +273,14 @@ function prepare_backbone_model(
                         adjust_indices!(fixed_indices, insertion_idx)
                         adjust_indices!(fixed_indices, insertion_idx)
 
-                        index = searchsortedfirst(fixed_indices, insertion_idx)
-                        insert!(fixed_indices, index, insertion_idx)
-                        insert!(fixed_indices, index+1, insertion_idx+1)
+                        insert_sorted!(fixed_indices, insertion_idx)
+                        insert_sorted!(fixed_indices, insertion_idx+1)
+                        insert_sorted!(fixed_indices, insertion_idx+2)
+                        #log_info(extra_frames, insertion_idx, fixed_indices)
                         
                     end
                     a+=2
+                    #log_info(extra_frames)
                 
                 end
                 prev_res_idx = res_idx

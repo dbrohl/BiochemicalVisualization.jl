@@ -11,6 +11,9 @@ mutable struct CatmullRom
     function CatmullRom(chain::BiochemicalAlgorithms.Chain, control_point_strategy)
         if(control_point_strategy==ControlPoints.C_ALPHA)
             points, point_to_residue_indices = c_alphas_to_points(chain)
+            if(length(points)<2)
+                throw(ErrorException("too few ($(length(points))) c_alpha atoms to compute spline"))
+            end
 
             # add first and last dummy point
             # control points cannot be the same (otherwise the sampling produces NaN values)

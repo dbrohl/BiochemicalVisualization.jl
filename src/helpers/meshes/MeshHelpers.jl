@@ -148,16 +148,22 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where {T}
 end
 
 # Adds faces between circles to create the surface of a tube. 
-function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) where {T}
+function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints = nothing) where {T}
 
     shiftSum = 0
 
     # collect all points
-    points = hcat(map(m->m.vertices, circles)...)
-    colors = vcat(map(c -> c.colors, circles)...)
+    if(endpoints===nothing)
+        points = hcat(map(m->m.vertices, circles)...)
+        colors = vcat(map(c -> c.colors, circles)...)
+    else
+        @assert length(endpoints)==2
+        points = hcat(map(m->m.vertices, circles)..., endpoints...)
+        colors = vcat(map(c -> c.colors, circles)..., circles[1].colors[1], circles[end].colors[1])
+    end
 
     resolution = size(circles[1].vertices, 2)
-    connections = Array{Int, 2}(undef, 3, (length(circles)-1)*(2*resolution))
+    connections = Array{Int, 2}(undef, 3, (length(circles)-1)*(2*resolution) + (endpoints===nothing ? 0 : 2*resolution))
     
     offset = 0
     connection_i = 1
@@ -184,6 +190,20 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}) wh
         prev_indices = current_indices
         offset += nvertices(c)
     end
+
+    if(endpoints!==nothing) # create ends
+        start_point_index = size(points, 2)-1
+        connections[1, connection_i:connection_i+resolution-1] = collect(1:resolution)'
+        connections[2, connection_i:connection_i+resolution-1] = circshift(1:resolution, 1)'
+        connections[3, connection_i:connection_i+resolution-1] = repeat([start_point_index], resolution)'
+        connection_i += resolution
+
+        connections[1, connection_i:connection_i+resolution-1] = collect(start_point_index-resolution:start_point_index-1)'
+        connections[2, connection_i:connection_i+resolution-1] = circshift(start_point_index-resolution:start_point_index-1, 1)'
+        connections[3, connection_i:connection_i+resolution-1] = repeat([start_point_index+1], resolution)'
+        connection_i += resolution
+    end
+
 
     log_info(types, "Type of points in connect_tube: ", typeof(points))
 

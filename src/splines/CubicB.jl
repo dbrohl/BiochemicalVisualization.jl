@@ -11,6 +11,10 @@ mutable struct CubicB
     function CubicB(chain::BiochemicalAlgorithms.Chain, control_point_strategy) #TODO correct first and last points?
         if(control_point_strategy==ControlPoints.C_ALPHA)
             points, point_to_residue_indices = c_alphas_to_points(chain)
+            if(length(points)<2)
+                throw(ErrorException("too few ($(length(points))) c_alpha atoms to compute spline"))
+            end
+
             first_point = points[1] - (points[2]-points[1])
             last_point = points[end] + (points[end]-points[end-1])
             points = hcat(first_point, points..., last_point)

@@ -161,17 +161,23 @@ function prepare_backbone_model(
     end
 
     chain_meshes::Vector{PlainMesh{U}} = []
+    aborted_chain_count = 0
     for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
-        println()
         fragment_list = fragments(chain)
-        # TODO zu kurze chains abfangen, chains ohne c_alphas
 
         # construct spline
-        if(config.spline==Spline.CATMULL_ROM)
-            spline = CatmullRom(chain, config.control_point_strategy)
-        elseif(config.spline==Spline.CUBIC_B)
-            spline = CubicB(chain, config.control_point_strategy)
+        local spline
+        try
+            if(config.spline==Spline.CATMULL_ROM)
+                spline = CatmullRom(chain, config.control_point_strategy)
+            elseif(config.spline==Spline.CUBIC_B)
+                spline = CubicB(chain, config.control_point_strategy)
+            end
+        catch e
+            aborted_chain_count += 1
+            continue
         end
+
 
         # sample along spline
         spline_points::Matrix{U}, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, vertices_per_unit)
@@ -227,7 +233,6 @@ function prepare_backbone_model(
 
         end
 
-        log_info(extra_frames, "Fixed indices: ", fixed_indices)
         # add frames when secondary structure changes # TODO what if n_to_c is false?
         if(config.backbone_type==BackboneType.CARTOON)
             frame_config = Dict()
@@ -293,7 +298,7 @@ function prepare_backbone_model(
 
         # filter
         if(config.filter==Filter.ANGLE)
-            # create a list of points that are fixed and cannot be removed by the filter # TODO in 2lwq, one sheet has a too short residue coloring
+            # create a list of points that are fixed and cannot be removed by the filter
             insert!(fixed_indices, 1, 1) # begin and end cannot be dropped
             push!(fixed_indices, size(spline_points, 2))
 
@@ -361,7 +366,7 @@ function prepare_backbone_model(
         # push!(framesB, local_frame_mesh(spline_points[:, 1], q[:, 1], r[:, 1], s[:, 1]))
 
         # iterate and create vertices
-        for current_index=axes(spline_points, 2) # start- and endcap bases are the first and last splinepoints #TODO offset wieder auf 2, wenn Endkappen wieder funktionieren
+        for current_index=axes(spline_points, 2)
             if(config.filter!=Filter.NONE && current_index ∉ remaining_indices)
                 continue
             end
@@ -393,9 +398,8 @@ function prepare_backbone_model(
                 elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
                     circle_points = create_rectangle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius * T(rectangle_widths[current_index]), T(0.5)*config.stick_radius)
                 end
-            end
+            end 
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
-            #TODO extra geometry at SS and arrow boundaries?
 
             if(config.color==Color.UNIFORM)
                 color!(circle, uniform_color)
@@ -423,7 +427,7 @@ function prepare_backbone_model(
             push!(circles, circle)
         end
 
-        spline_mesh = connect_circles_to_tube(circles)
+        spline_mesh = connect_circles_to_tube(circles, [spline_points[:, 1], spline_points[:, end]])
         log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
         # ----- debug export -----
@@ -435,88 +439,15 @@ function prepare_backbone_model(
 
         # fs = reduce(merge, framesB)
         # export_mesh_to_ply("framesB.ply", fs)
-
-        # ----- add hemispheres to both ends -----
-
-    #     # position
-    #     TODO start_cap = deepcopy(cap_mesh)
-    #     rotate_in_direction!(start_cap, -(spline_points[:, 2]-spline_points[:, 1]))
-    #     translate!(start_cap, spline_points[:, 1])
-    #     end_cap = deepcopy(cap_mesh)
-    #     rotate_in_direction!(end_cap, -(spline_points[:, end-1]-spline_points[:, end]))
-    #     translate!(end_cap, spline_points[:, end-1])
-
-    #     color!(start_cap, chain_colors[chain_num])
-    #     color!(end_cap, chain_colors[chain_num])
-    #     # color!(start_cap, (0, 255, 0))
-    #     # color!(end_cap, (0, 0, 255))
-
-    #     log_info(types, "Typeof shifted cap: ", typeof(start_cap), " ", typeof(end_cap))
-
-    #     # merge meshes
-
-    #     points = [spline_mesh.vertices start_cap.vertices end_cap.vertices]
-    #     colors = [spline_mesh.colors; start_cap.colors; end_cap.colors]
-
-    #     connections::Matrix{Int} = Matrix(undef, 3, nconnections(spline_mesh) + nconnections(start_cap) + nconnections(end_cap) + 4 * resolution)
+        # ------------------------
         
-    #     position = 1
-    #     offset = 0
-    #     connections[:, position : position + nconnections(spline_mesh)-1] = spline_mesh.connections
-    #     position += nconnections(spline_mesh)
-    #     offset += nvertices(spline_mesh)
-
-    #     connections[:, position : position + nconnections(start_cap)-1] = (start_cap.connections .+ offset)
-    #     position += nconnections(start_cap)
-    #     offset += nvertices(start_cap)
-
-    #     connections[:, position : position + nconnections(end_cap)-1] = (end_cap.connections .+ offset)
-    #     position += nconnections(end_cap)
-    #     offset += nvertices(end_cap)
-
-    #     # add new connections
-
-    #     start_cap_base_indices = nvertices(spline_mesh)+1 : nvertices(spline_mesh)+resolution
-    #     end_cap_base_indices = nvertices(spline_mesh)+nvertices(start_cap)+1 : nvertices(spline_mesh)+nvertices(start_cap)+resolution
-    #     first_circle_indices = 1 : resolution
-    #     last_circle_indices = nvertices(spline_mesh)-resolution+1 : nvertices(spline_mesh)
-
-    #     shift, flip = determine_offset(points[:, start_cap_base_indices[1]], points[:, start_cap_base_indices[2]], points[:, first_circle_indices])
-    #     first_circle_indices = circshift(first_circle_indices, -shift)
-    #     if(flip)
-    #         reverse!(first_circle_indices)
-    #     end
-
-    #     shift, flip = determine_offset(points[:, end_cap_base_indices[1]], points[:, end_cap_base_indices[2]], points[:, last_circle_indices])
-    #     end_cap_base_indices = circshift(end_cap_base_indices, -shift)
-    #     if(flip)
-    #         reverse!(end_cap_base_indices)
-    #     end
-
-
-    #     connections[1, position:position+resolution-1] = start_cap_base_indices'
-    #     connections[2, position:position+resolution-1] = first_circle_indices'
-    #     connections[3, position:position+resolution-1] = circshift(first_circle_indices, 1)'
-    #     position += resolution
-
-    #     connections[1, position:position+resolution-1] = start_cap_base_indices'
-    #     connections[2, position:position+resolution-1] = circshift(first_circle_indices, 1)'
-    #     connections[3, position:position+resolution-1] = circshift(start_cap_base_indices, 1)'
-    #     position += resolution
-
-    #     connections[1, position:position+resolution-1] = end_cap_base_indices'
-    #     connections[2, position:position+resolution-1] = last_circle_indices'
-    #     connections[3, position:position+resolution-1] = circshift(last_circle_indices, 1)'
-    #     position += resolution
-
-    #     connections[1, position:position+resolution-1] = end_cap_base_indices'
-    #     connections[2, position:position+resolution-1] = circshift(last_circle_indices, 1)'
-    #     connections[3, position:position+resolution-1] = circshift(end_cap_base_indices, 1)'
-    #     position += resolution
-        
-    #     push!(chain_meshes, PlainMesh(points, connections, colors))
-    #     log_info(types, "Type of capped spline mesh: ", typeof(chain_meshes[end]))
         push!(chain_meshes, spline_mesh)
+    end
+    if(length(chain_meshes)==0)
+        throw(ErrorException("all chains had too few c_alpha atoms. Mesh could not be generated. "))
+    end
+    if(aborted_chain_count>0)
+        log_warning("Skipped $aborted_chain_count chains because they did not conain enough c_alpha atoms. ")
     end
     temp = merge_multiple_meshes(chain_meshes)
     result = Representation(temp)

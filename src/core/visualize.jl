@@ -2,8 +2,9 @@ export
 ball_and_stick, 
 stick, 
 van_der_waals,
-backbone, backbone_gpu,
-ribbon
+backbone,
+ribbon,
+cartoon
 
 const VISUALIZE = ES6Module(asset_path("visualize_structure.js"))::Asset
 
@@ -210,26 +211,60 @@ van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 
 
 function backbone(ac; path="BALL_export_backbone.ply", config=nothing)
+	default_config = BackboneConfig(0.2, 
+			12, 
+			BackboneType.BACKBONE, 
+			Color.CHAIN, 
+			Spline.CUBIC_B, 
+			ControlPoints.MID_POINTS, 
+			Frame.RMF, 
+			Filter.ANGLE)
 	if(config===nothing)
-		config = BackboneConfig(0.2, 
-		12, 
-		BackboneType.CARTOON, 
-		Color.RESIDUE, 
-		Spline.CUBIC_B, 
-		ControlPoints.MID_POINTS, 
-		Frame.SECOND_SPLINE, 
-		Filter.ANGLE)
+		config = default_config
+	else
+		config = complete_config(config, default_config)
 	end
 	representation = prepare_backbone_model(ac, config)
 	export_mesh_representation_to_ply(path, representation)
 end 
 
-function backbone_gpu(ac)
-	representation = prepare_backbone_model_gpu(ac, resolution = 12)
-	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
-end 
+# function backbone_gpu(ac)
+# 	representation = prepare_backbone_model_gpu(ac, resolution = 12)
+# 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
+# end 
 
-function ribbon(ac; resolution=12, path="BALL_export_ribbon.ply") # TODO fix
-	representation = prepare_ribbon_model(ac, resolution = resolution)
-	#TODO export_mesh_representation_to_ply(path, representation)
+function ribbon(ac; path="BALL_export_backbone.ply", config=nothing)
+	default_config = BackboneConfig(0.2, 
+			12, 
+			BackboneType.RIBBON, 
+			Color.CHAIN, 
+			Spline.CUBIC_B, 
+			ControlPoints.MID_POINTS, 
+			Frame.SECOND_SPLINE, 
+			Filter.ANGLE)
+	if(config===nothing)
+		config = default_config
+	else
+		config = complete_config(config, default_config)
+	end
+	representation = prepare_backbone_model(ac, config)
+	export_mesh_representation_to_ply(path, representation)
+end
+
+function cartoon(ac; path="BALL_export_backbone.ply", config=nothing)
+	default_config = BackboneConfig(0.2, 
+			12, 
+			BackboneType.CARTOON, 
+			Color.SECONDARY_STRUCTURE, 
+			Spline.CUBIC_B, 
+			ControlPoints.MID_POINTS, 
+			Frame.SECOND_SPLINE, 
+			Filter.ANGLE)
+	if(config===nothing)
+		config = default_config
+	else
+		config = complete_config(config, default_config)
+	end
+	representation = prepare_backbone_model(ac, config)
+	export_mesh_representation_to_ply(path, representation)
 end 

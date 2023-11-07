@@ -38,6 +38,9 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
             push!(point_to_residue_indices, i)
         end
     end
+    if(length(c_alphas)<3)
+        throw(ErrorException("too few ($(length(c_alphas))) c_alpha atoms to compute spline with Carson&Bugg method"))
+    end
 
     # sphere_radius = 0.05
     # sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))

@@ -254,8 +254,8 @@ function prepare_backbone_model(
                         sample_to_residue_indices[insertion_idx+1] = nothing
                         sample_to_residue_indices[insertion_idx+2] = nothing
                         
-                        frame_config[insertion_idx+1] = (fragment_list[prev_res_idx], fragment_list[res_idx])
-                        frame_config[insertion_idx+2] = (fragment_list[res_idx], fragment_list[res_idx])
+                        frame_config[insertion_idx+1] = (small_to_large, true, fragment_list[prev_res_idx], fragment_list[res_idx])
+                        frame_config[insertion_idx+2] = (small_to_large, false, fragment_list[res_idx], fragment_list[res_idx])
 
                         adjust_indices!(fixed_indices, insertion_idx+1)
                         adjust_indices!(fixed_indices, insertion_idx+1)
@@ -272,8 +272,8 @@ function prepare_backbone_model(
                         sample_to_residue_indices[insertion_idx] = nothing
                         sample_to_residue_indices[insertion_idx+1] = nothing
                         
-                        frame_config[insertion_idx] = (fragment_list[prev_res_idx], fragment_list[prev_res_idx])
-                        frame_config[insertion_idx+1] = (fragment_list[res_idx], fragment_list[prev_res_idx])
+                        frame_config[insertion_idx] = (small_to_large, true, fragment_list[prev_res_idx], fragment_list[prev_res_idx])
+                        frame_config[insertion_idx+1] = (small_to_large, false, fragment_list[res_idx], fragment_list[prev_res_idx])
 
                         adjust_indices!(fixed_indices, insertion_idx)
                         adjust_indices!(fixed_indices, insertion_idx)
@@ -385,18 +385,27 @@ function prepare_backbone_model(
             elseif(config.backbone_type==BackboneType.RIBBON)
                 circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius, config.stick_radius)
             elseif(config.backbone_type==BackboneType.CARTOON)
+                shortcut = false
                 if(sample_to_residue_indices[current_index]===nothing)
-                    residue = frame_config[current_index][1]
+                    if((frame_config[current_index][1] == frame_config[current_index][2]))
+                        circle_points = stack(repeat([spline_points[:, current_index]], config.resolution)) # TODO only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
+                        shortcut = true
+                    else
+                        residue = frame_config[current_index][3]
+                    end
                 else
                     residue = fragment_list[sample_to_residue_indices[current_index]]
                 end
-                structure = residue.properties[:SS]
-                if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
-                    circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, config.stick_radius)
-                elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
-                    circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
-                elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                    circle_points = create_rectangle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius * T(rectangle_widths[current_index]), T(0.5)*config.stick_radius)
+
+                if(!shortcut)
+                    structure = residue.properties[:SS]
+                    if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
+                        circle_points = create_circle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, config.stick_radius)
+                    elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
+                        circle_points = create_ellipse_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
+                    elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
+                        circle_points = create_rectangle_in_local_frame(spline_points[:, current_index], r[:, current_index], s[:, current_index], config.resolution, T(3)*config.stick_radius * T(rectangle_widths[current_index]), T(0.5)*config.stick_radius)
+                    end
                 end
             end 
             circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
@@ -409,7 +418,7 @@ function prepare_backbone_model(
                 color!(circle, rainbow_colors[current_index])
             elseif(config.color==Color.SECONDARY_STRUCTURE)
                 if(sample_to_residue_indices[current_index]===nothing)
-                    residue = frame_config[current_index][2]
+                    residue = frame_config[current_index][4]
                 else
                     residue = fragment_list[sample_to_residue_indices[current_index]]
                 end
@@ -417,7 +426,7 @@ function prepare_backbone_model(
                 color!(circle, structure_color_mapping[structure])
             elseif(config.color==Color.RESIDUE)
                 if(sample_to_residue_indices[current_index]===nothing)
-                    residue = frame_config[current_index][2]
+                    residue = frame_config[current_index][4]
                 else
                     residue = fragment_list[sample_to_residue_indices[current_index]]
                 end

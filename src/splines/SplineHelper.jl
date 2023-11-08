@@ -25,7 +25,7 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
     oxygens = []
     structures = []
     point_to_residue_indices = []
-    for (i, fragment) in enumerate(fragments(chain))
+    for (i, fragment) in enumerate(fragments(chain)) # TODO no grouping in the loop!
         if(is_amino_acid(fragment.name))
             atom_list = atoms(fragment)
             ca = filter(x -> x.element==Elements.C && x.name=="CA", atom_list)

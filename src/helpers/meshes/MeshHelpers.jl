@@ -1,10 +1,4 @@
 export create_circle_in_local_frame, local_frame_mesh
-# Takes a 2D mesh and adds a z-coordinate of 0 to each point
-function lift_into_3d(mesh::SimpleMesh)
-    vertices_3d = map(v -> Point(v.coords..., 0), mesh.vertices)
-    result = SimpleMesh(vertices_3d, mesh.topology)
-    return result
-end
 
 function color!(mesh, new_color)
     mesh.colors = repeat([new_color], size(mesh.vertices, 2))
@@ -231,60 +225,4 @@ function determine_offset(p1, p2, circle_points)
     else 
         return nearest1-1, false
     end
-end
-
-
-# Generates a Hemisphere as a SimpleMesh. 
-function Hemisphere(radius, resolution, T)
-
-    vertices::Vector{Point{3,T}} = []
-    connections::Vector{Connectivity} = []
-
-    z_resolution = resolution ÷ 2
-    xy_angles = collect(range(0, 2*π, resolution+1))[1: (end-1)]
-    z_angles = collect(range(0, π/2, z_resolution+1))[1: (end-1)]
-
-    
-    for (i, z_angle) in enumerate(z_angles)
-        layer_radius = cos(z_angle) * radius
-        z = T(sin(z_angle) * radius)
-
-        for (j, xy_angle) in enumerate(xy_angles)
-            x = T(cos(xy_angle) * layer_radius)
-            y = T(sin(xy_angle) * layer_radius)
-            push!(vertices, Point(x, y, z))
-
-            if(i>1 && j>1)
-                # quad = connect((resolution*(i-2)+(j-1), resolution*(i-2)+j, resolution*(i-1)+j, resolution*(i-1)+j-1))
-                # push!(connections, quad)
-                a = connect((resolution*(i-2)+(j-1), resolution*(i-2)+j, resolution*(i-1)+j))
-                b = connect((resolution*(i-2)+(j-1), resolution*(i-1)+j, resolution*(i-1)+j-1))
-                push!(connections, a, b)
-
-                if(j==resolution) # connect with beginning
-                    # quad = connect((resolution*(i-2)+j, resolution*(i-2)+1, resolution*(i-1)+1,  resolution*(i-1)+j))
-                    # push!(connections, quad)
-                    a = connect((resolution*(i-2)+j, resolution*(i-2)+1, resolution*(i-1)+1))
-                    b = connect((resolution*(i-2)+j, resolution*(i-1)+1,  resolution*(i-1)+j))
-                    push!(connections, a, b)
-                end
-
-                if(i==z_resolution)
-                    tri = connect((resolution*(i-1)+j-1,  resolution*(i-1)+j, resolution*z_resolution+1))
-                    push!(connections, tri)
-
-                    if(j==resolution)
-                        tri = connect((resolution*(i-1)+j,  resolution*(i-1)+1, resolution*z_resolution+1))
-                        push!(connections, tri)
-                    end
-                end
-            end
-        end
-    end
-
-    north = Point(0, 0, radius)
-    push!(vertices, north)
-
-
-    return SimpleMesh(vertices, connections)
 end

@@ -1,4 +1,6 @@
-export BackboneConfig, BackboneType, Color, Spline, ControlPoints, Frame, Filter
+export BackboneConfig, # TODO remove once the export of prepare_backbone_model is removed
+PartialBackboneConfig, 
+BackboneType, Color, Spline, ControlPoints, Frame, Filter
 
 @enumx BackboneType begin
     BACKBONE
@@ -30,19 +32,31 @@ end # TODO hybrid?
     ANGLE
 end
 
-struct BackboneConfig
-    stick_radius
-    resolution
+mutable struct BackboneConfig
+    stick_radius::Real
+    resolution::Int
 
-    backbone_type
-    color
-    spline
-    control_point_strategy
-    frame
-    filter
+    backbone_type::BackboneType.T
+    color::Color.T
+    spline::Spline.T
+    control_point_strategy::ControlPoints.T
+    frame::Frame.T
+    filter::Filter.T
 end
 
-function BackboneConfig(;    
+mutable struct PartialBackboneConfig
+    stick_radius::Union{Real, Nothing}
+    resolution::Union{Int, Nothing}
+
+    backbone_type::Union{BackboneType.T, Nothing}
+    color::Union{Color.T, Nothing}
+    spline::Union{Spline.T, Nothing}
+    control_point_strategy::Union{ControlPoints.T, Nothing}
+    frame::Union{Frame.T, Nothing}
+    filter::Union{Filter.T, Nothing}
+end
+
+function PartialBackboneConfig(;    
     stick_radius = nothing, 
     resolution = nothing, 
     backbone_type = nothing, 
@@ -51,10 +65,10 @@ function BackboneConfig(;
     control_point_strategy = nothing, 
     frame = nothing, 
     filter = nothing)
-    return BackboneConfig(stick_radius, resolution, backbone_type, color, spline, control_point_strategy, frame, filter)
+    return PartialBackboneConfig(stick_radius, resolution, backbone_type, color, spline, control_point_strategy, frame, filter)
 end
 
-function complete_config(partial, template)
+function complete_config(partial::PartialBackboneConfig, template::BackboneConfig)
     return BackboneConfig(
         partial.stick_radius===nothing ? template.stick_radius : partial.stick_radius,
         partial.resolution===nothing ? template.resolution : partial.resolution,

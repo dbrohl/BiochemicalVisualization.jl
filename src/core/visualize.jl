@@ -251,7 +251,7 @@ function ribbon(ac; path="BALL_export_backbone.ply", config=nothing)
 	export_mesh_representation_to_ply(path, representation)
 end
 
-function cartoon(ac; path="BALL_export_backbone.ply", config=nothing)
+function cartoon(ac; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing)
 	default_config = BackboneConfig(0.2, 
 			12, 
 			BackboneType.CARTOON, 

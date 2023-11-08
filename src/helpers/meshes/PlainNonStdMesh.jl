@@ -5,7 +5,7 @@ mutable struct PlainNonStdMesh{T}
 end
 
 
-function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
+function PlainNonStdMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
     @assert length(colors)==length(mesh.vertices)
 
     vertices = hcat([collect(v.coords.coords) for v in mesh.vertices]...)
@@ -19,11 +19,11 @@ function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector
     PlainNonStdMesh{T}(vertices, connects, colors)
 end
 
-function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
+function PlainNonStdMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
     PlainNonStdMesh(mesh, repeat([color], length(mesh.vertices)))
 end
 
-function PlainNonStdMesh(mesh::SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
+function PlainNonStdMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
     PlainNonStdMesh(mesh, (0, 0, 255))
 end
 

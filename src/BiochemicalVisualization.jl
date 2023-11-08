@@ -4,7 +4,7 @@ using BiochemicalAlgorithms
 
 using Colors
 import GeometryBasics
-using Meshes
+import Meshes
 using JSServe
 using LinearAlgebra
 using MsgPack
@@ -54,7 +54,6 @@ include("helpers/point_filter.jl")
 include("helpers/color_maps.jl")
 
 include("core/representation.jl")
-include("core/visualize.jl")
 
 
 
@@ -72,6 +71,9 @@ include("models/van_der_waals.jl")
 include("splines/SplineHelper.jl")
 include("splines/CatmullRom.jl")
 include("splines/CubicB.jl")
+
+
+include("core/visualize.jl")
 
 
 end # module BiochemicalVisualization

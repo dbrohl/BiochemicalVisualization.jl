@@ -6,7 +6,7 @@ end
 
 
 
-function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
+function PlainMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
     @assert length(colors)==length(mesh.vertices)
 
     vertices = hcat([collect(v.coords.coords) for v in mesh.vertices]...)
@@ -21,11 +21,11 @@ function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTupl
     PlainMesh{T}(vertices, connects, colors)
 end
 
-function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
+function PlainMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
     PlainMesh(mesh, repeat([color], size(mesh.vertices, 1)))
 end
 
-function PlainMesh(mesh::SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
+function PlainMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}) where {Dim, T, V, TP}
     PlainMesh(mesh, (0, 0, 255))
 end
 

@@ -1,3 +1,4 @@
+# This is very old and has to be modified a lot!
 export prepare_backbone_model_gpu
 
 function my_norm(a, b, c)
@@ -156,7 +157,7 @@ function prepare_backbone_model_gpu(
 
         println("Connects:", connects[1:10])
 
-        export_mesh_to_ply("gpu.ply", SimpleMesh(temp, connects))
+        export_mesh_to_ply("gpu.ply", Meshes.SimpleMesh(temp, connects))
 
         # TODO caps, color, shift/flip
 

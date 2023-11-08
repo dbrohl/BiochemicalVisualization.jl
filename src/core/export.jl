@@ -45,7 +45,7 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
 end
 
 
-function export_mesh_to_ply(path::AbstractString, mesh::X) where {X<:Union{SimpleMesh, ColoredMesh}}
+function export_mesh_to_ply(path::AbstractString, mesh::X) where {X<:Union{Meshes.SimpleMesh, ColoredMesh}}
 
     the_vertices = collect(mesh.vertices)
     faces = []

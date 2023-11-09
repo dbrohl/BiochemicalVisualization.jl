@@ -1,4 +1,10 @@
-export prepare_backbone_model, generate_chain_mesh, generate_geometry_at_point # TODO remove
+export prepare_backbone_model, generate_chain_mesh, generate_geometry_at_point, benchmark_method # TODO remove
+
+function benchmark_method(ac::System{T}, config::BackboneConfig) where T
+    mesh = prepare_backbone_model(ac, config)
+    representation = Representation(mesh) 
+    return representation
+end
 
 function insert_sorted!(array, elem)
     index = searchsortedfirst(array, elem)
@@ -123,8 +129,9 @@ function generate_geometry_at_point(
     binormal::Vector{T}, 
     linked_residue::Union{Nothing,Fragment{T}}, 
     frame_config::Union{Nothing,Tuple{Bool, Bool, Fragment{T}, Fragment{T}}}, 
-    fixed_color::Union{NTuple{3, Int}, Nothing}, 
     rectangle_width::T, 
+    fixed_color::Union{NTuple{3, Int}, Nothing}, 
+    color_dict::Union{Nothing, Dict{SecondaryStructure.T, NTuple{3, Int}}, Dict{String, NTuple{3, Int}}},
     config::BackboneConfig) where T
     # generate cross-section vertices
     if(config.backbone_type==BackboneType.BACKBONE)
@@ -168,14 +175,14 @@ function generate_geometry_at_point(
             residue = linked_residue
         end
         structure = residue.properties[:SS]
-        color!(circle, get_structure_color_mapping()[structure])
+        color!(circle, color_dict[structure])
     elseif(config.color==Color.RESIDUE)
         if(linked_residue===nothing)
             residue = frame_config[4]
         else
             residue = linked_residue
         end
-        color!(circle, get_amino_acid_color_mapping()[residue.name])
+        color!(circle, color_dict[residue.name])
     end
     return circle
 end
@@ -370,6 +377,13 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
         # end
     end
 
+    color_dict = nothing
+    if(config.color==Color.SECONDARY_STRUCTURE)
+        color_dict = get_structure_color_mapping()
+    elseif(config.color==Color.RESIDUE)
+        color_dict = get_amino_acid_color_mapping()
+    end
+
 
     log_info(types, "Type of spline points: ", typeof(spline_points))
 
@@ -393,11 +407,10 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
         # frameA = local_frame_mesh(spline_points[:, current_index], q[:, current_index], r[:, current_index], s[:, current_index])
         # push!(framesA, frameA)
 
-
+        
         if(config.color==Color.RAINBOW)
             fixed_color = rainbow_colors[current_index]
-        end
-        if(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
+        elseif(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
             fixed_color = (0, 0, 255)
         end
 
@@ -407,8 +420,9 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             s[:, current_index], 
             sample_to_residue_indices[current_index]===nothing ? nothing : fragment_list[sample_to_residue_indices[current_index]],
             (config.backbone_type==BackboneType.CARTOON && current_index ∈ keys(frame_config)) ? frame_config[current_index] : nothing,
-            fixed_color, 
             config.backbone_type==BackboneType.CARTOON ? rectangle_widths[current_index] : T(1.0),
+            fixed_color, 
+            color_dict,
             config)
 
         push!(circles, circle)
@@ -453,10 +467,6 @@ function prepare_backbone_model(
         uniform_color = (255, 0, 0)
     elseif(config.color==Color.CHAIN)
         chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end])
-    # elseif(config.color==Color.SECONDARY_STRUCTURE)
-    #     structure_color_mapping = get_structure_color_mapping()
-    # elseif(config.color==Color.RESIDUE)
-    #     amino_acid_color_mapping = get_amino_acid_color_mapping()
     end
 
     chain_meshes::Vector{PlainMesh{T}} = []

@@ -4,25 +4,7 @@ function color!(mesh, new_color)
     mesh.colors = repeat([new_color], size(mesh.vertices, 2))
 end
 
-function translate!(mesh, vec::AbstractArray{T}) where T <: AbstractFloat 
-    mesh.vertices .+= vec
-end
-
-# Assumes the object in the origin and rotates it, so that its new local z-axis points to direction. 
-function rotate_in_direction!(mesh::Union{PlainMesh, PlainNonStdMesh}, direction::AbstractArray{T}) where T<:AbstractFloat
-
-    if(direction[1]!=0)
-        rotationAxis = Vec(-direction[2]/direction[1], T(1), T(0)) * -sign(direction[1])
-    elseif(direction[2]!=0)
-        rotationAxis = Vec(T(1), -direction[1]/direction[2], T(0)) * sign(direction[2]) # rotation axis is perpendicular to direction and lies in the xy-plane
-    else
-        return
-    end
-    rotationAngle = Meshes.∠(Vec{3,T}(direction...), Vec(T(0), T(0), T(1)))
-    mesh.vertices = (mesh.vertices' * AngleAxis(rotationAngle, rotationAxis...))'
-end
-
-function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T<:AbstractFloat
+function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T
     points = Matrix{T}(undef, 3, resolution)
 
     for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
@@ -31,7 +13,7 @@ function create_circle_in_local_frame(center::AbstractArray{T}, local_y::Abstrac
     return points
 end
 
-function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T<:AbstractFloat
+function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     points = Matrix{T}(undef, 3, resolution)
 
     for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
@@ -40,7 +22,7 @@ function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::Abstra
     return points
 end
 
-function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T<:AbstractFloat
+function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     if(resolution<4)
         return create_ellipse_in_local_frame(center, local_y, local_z, resolution, width, height)
     end
@@ -113,11 +95,16 @@ end
         
 
 # Merges multiple mesh objects into one. The geometry (vertices/edges/faces) does not change. 
-function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where {T}
+function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
     num_points = sum(map(m -> size(m.vertices, 2), meshes))
     num_connects = sum(map(m -> size(m.connections, 2), meshes))
 
-    points = hcat(map(m->m.vertices, meshes)...)
+    points = Matrix{T}(undef, 3, num_points)
+    a = 1
+    for m in meshes
+        points[:, a:a+size(m.vertices, 2)-1] = m.vertices
+        a += size(m.vertices, 2)
+    end
 
     colors = Array{NTuple{3, Int}}(undef, num_points)
     connects = Array{Int, 2}(undef, 3, num_connects)
@@ -138,25 +125,30 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where {T}
         connect_offset += connect_len
     end
 
-    return PlainMesh(points, connects, colors)
+    return PlainMesh{T}(points, connects, colors)
 end
 
 # Adds faces between circles to create the surface of a tube. 
 function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints = nothing) where {T}
 
-    shiftSum = 0
+    resolution = size(circles[1].vertices, 2)
 
     # collect all points
-    if(endpoints===nothing)
-        points = hcat(map(m->m.vertices, circles)...)
-        colors = vcat(map(c -> c.colors, circles)...)
-    else
-        @assert length(endpoints)==2
-        points = hcat(map(m->m.vertices, circles)..., endpoints...)
-        colors = vcat(map(c -> c.colors, circles)..., circles[1].colors[1], circles[end].colors[1])
+    matrix_length = (length(circles) * resolution) + (endpoints===nothing ? 0 : 2)
+    points = Matrix{T}(undef, 3, matrix_length)
+    colors = Vector{NTuple{3, Int}}(undef, matrix_length)
+    for (i, circle) in enumerate(circles)
+        points[:, (i-1)*resolution+1:i*resolution] = circle.vertices
+        colors[(i-1)*resolution+1:i*resolution] = circle.colors
+    end
+    if(endpoints!==nothing)
+        points[:, end-1] = endpoints[1]
+        colors[end-1] = circles[1].colors[1]
+        points[:, end] = endpoints[2]
+        colors[end] = circles[end].colors[1]
     end
 
-    resolution = size(circles[1].vertices, 2)
+    
     connections = Array{Int, 2}(undef, 3, (length(circles)-1)*(2*resolution) + (endpoints===nothing ? 0 : 2*resolution))
     
     offset = 0
@@ -201,28 +193,6 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, en
 
     log_info(types, "Type of points in connect_tube: ", typeof(points))
 
-    log_info(frame_rotation, "Total needed rotation: ", shiftSum)
-
     
-    return PlainMesh(points, connections, colors)
-end
-
-function determine_offset(p1, p2, circle_points)
-
-    distances1 = map(cp -> norm(p1 .- cp), eachcol(circle_points))
-    nearest1 = argmin(distances1)
-
-    distances2 = map(cp -> norm(p2 .- cp), eachcol(circle_points))
-    distances2[nearest1] = max(distances2...)+1
-    nearest2 = argmin(distances2)
-
-    a = mod(nearest2-nearest1, size(circle_points, 2))
-  
-    if(a>size(circle_points, 2)/2)
-
-        log_info(circle_index_correction, nearest1, " ", nearest2)
-        return nearest1-1, true
-    else 
-        return nearest1-1, false
-    end
+    return PlainMesh{T}(points, connections, colors)
 end

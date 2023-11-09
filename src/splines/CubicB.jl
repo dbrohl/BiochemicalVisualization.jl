@@ -1,14 +1,14 @@
-mutable struct CubicB
+mutable struct CubicB{T <: Real}
     controlPointStrategy
-    controlPoints::Matrix # 3 rows, n cols
-    minorControlPoints::Union{Matrix, Nothing}
+    controlPoints::Matrix{T} # 3 rows, n cols
+    minorControlPoints::Union{Matrix{T}, Nothing}
 
-    point_to_residue_indices::Vector
+    point_to_residue_indices::Vector{Int}
 
     num_points_per_resolution::Dict{Int, Vector}
     sample_mapping_per_resolution::Dict{Int, Vector}
 
-    function CubicB(chain::BiochemicalAlgorithms.Chain, control_point_strategy) #TODO correct first and last points?
+    function CubicB(chain::Chain{T}, control_point_strategy) where T #TODO correct first and last points?
         if(control_point_strategy==ControlPoints.C_ALPHA)
             points, point_to_residue_indices = c_alphas_to_points(chain)
             if(length(points)<2)
@@ -22,7 +22,7 @@ mutable struct CubicB
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
 
-            new(control_point_strategy, points, nothing, point_to_residue_indices, Dict(), Dict())
+            new{T}(control_point_strategy, points, nothing, point_to_residue_indices, Dict(), Dict())
         elseif(control_point_strategy==ControlPoints.MID_POINTS)
             major_points, minor_points, point_to_residue_indices = generate_points_carson_bugg(chain, true)
 
@@ -32,7 +32,7 @@ mutable struct CubicB
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
             
-            new(control_point_strategy, major_points, minor_points, point_to_residue_indices, Dict(), Dict())
+            new{T}(control_point_strategy, major_points, minor_points, point_to_residue_indices, Dict(), Dict())
         else
             throw(ArgumentError("$control_point_strategy not implemented for CubicBSpline"))
         end
@@ -52,37 +52,42 @@ function calculate_minor_points(spline::CubicB, resolution)
     return evaluate_generic_quadruple_spline(spline.minorControlPoints, num_points(spline, resolution), compute_cubicb_quadruple)
 end
 
-function compute_cubicb_quadruple((P0, P1, P2, P3), num_points)
+function compute_cubicb_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
 
-    result_points = Matrix(undef, 3, num_points)
+    result_points = Matrix{T}(undef, 3, num_points)
 
     M = [1 4 1 0
     -3 0 3 0
     3 -6 3 0
     -1 3 -3 1]
     p_matrix = [P0 P1 P2 P3]'
-    fixed_part = 1/6 * M * p_matrix
+    fixed_part = T(1/6) * M * p_matrix
 
-    sampling_range = range(0, 1, num_points)
+    sampling_range = range(T(0), T(1), num_points)
+
+    t_matrix::Matrix{T} = [1 0 0 0]
     for (i, t) in enumerate(sampling_range)
-        result_points[:, i] = [1 t t^2 t^3] * fixed_part
+        t_matrix[:, 2:4] = [t t^2 t^3]
+        result_points[:, i] = t_matrix * fixed_part
     end
     return result_points
 end
 
-function compute_cubicb_quadruple_derivative((P0, P1, P2, P3), num_points)
-    result_points = Matrix(undef, 3, num_points)
+function compute_cubicb_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
+    result_points = Matrix{T}(undef, 3, num_points)
 
     M = [1 4 1 0
     -3 0 3 0
     3 -6 3 0
     -1 3 -3 1]
     p_matrix = [P0 P1 P2 P3]'
-    fixed_part = 1/6 * M * p_matrix
+    fixed_part = T(1/6) * M * p_matrix
 
-    sampling_range = range(0, 1, num_points)
+    sampling_range = range(T(0), T(1), num_points)
+    t_matrix::Matrix{T} = [0 1 0 0]
     for (i, t) in enumerate(sampling_range)
-        result_points[:, i] = [0 1 2*t 3*t^2] * fixed_part
+        t_matrix[:, 3:4] = [2*t 3*t^2]
+        result_points[:, i] = t_matrix * fixed_part
     end
     return result_points
 end

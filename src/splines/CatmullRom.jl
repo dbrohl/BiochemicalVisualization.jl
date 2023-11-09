@@ -1,14 +1,14 @@
-mutable struct CatmullRom
+mutable struct CatmullRom{T<:Real}
     controlPointStrategy
-    controlPoints::Matrix # 3 rows, n cols
-    minorControlPoints::Union{Matrix, Nothing}
+    controlPoints::Matrix{T} # 3 rows, n cols
+    minorControlPoints::Union{Matrix{T}, Nothing}
 
-    point_to_residue_indices::Vector
+    point_to_residue_indices::Vector{Int}
 
     num_points_per_resolution::Dict{Int, Vector}
     sample_mapping_per_resolution::Dict{Int, Vector}
 
-    function CatmullRom(chain::BiochemicalAlgorithms.Chain, control_point_strategy)
+    function CatmullRom(chain::Chain{T}, control_point_strategy) where T
         if(control_point_strategy==ControlPoints.C_ALPHA)
             points, point_to_residue_indices = c_alphas_to_points(chain)
             if(length(points)<2)
@@ -24,7 +24,7 @@ mutable struct CatmullRom
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
 
-            new(control_point_strategy, points, nothing, point_to_residue_indices, Dict(), Dict())
+            new{T}(control_point_strategy, points, nothing, point_to_residue_indices, Dict(), Dict())
         elseif(control_point_strategy==ControlPoints.MID_POINTS)
             major_points, minor_points, point_to_residue_indices = generate_points_carson_bugg(chain, false)
 
@@ -36,7 +36,7 @@ mutable struct CatmullRom
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
             
-            new(control_point_strategy, major_points, minor_points, point_to_residue_indices, Dict(), Dict())
+            new{T}(control_point_strategy, major_points, minor_points, point_to_residue_indices, Dict(), Dict())
         else
             throw(ArgumentError("$control_point_strategy not implemented for CatmullRomSpline"))
         end
@@ -59,13 +59,13 @@ end
 
 
 # Code adapted from https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline#Code_example_in_Python (Last access: 24.07.2023)
-function compute_catmull_rom_quadruple((P0, P1, P2, P3), num_points)
+function compute_catmull_rom_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
     t0 = 0
     t1 = tRecursion(P1, P0, t0)
     t2 = tRecursion(P2, P1, t1)
     t3 = tRecursion(P3, P2, t2)
 
-    result_points = Matrix(undef, 3, num_points)
+    result_points = Matrix{T}(undef, 3, num_points)
 
     ts = collect(range(t1, t2, num_points))
 
@@ -84,13 +84,13 @@ function compute_catmull_rom_quadruple((P0, P1, P2, P3), num_points)
     return result_points
 end
 
-function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3), num_points)
+function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
     t0 = 0
     t1 = tRecursion(P1, P0, t0)
     t2 = tRecursion(P2, P1, t1)
     t3 = tRecursion(P3, P2, t2)
 
-    result_velocities = Matrix(undef, 3, num_points)
+    result_velocities = Matrix{T}(undef, 3, num_points)
     ts = collect(range(t1, t2, num_points))
 
     for (i, t) in enumerate(ts)
@@ -115,8 +115,7 @@ function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3), num_points)
     return result_velocities
 end
 
-function tRecursion(pCurr, pPrev, tPrev)
-
+function tRecursion(pCurr::Vector{T}, pPrev::Vector{T}, tPrev::T) where T
     distance = norm(pCurr .- pPrev)
-    return distance^0.5 + tPrev
+    return distance^ (T(0.5)) + tPrev
 end

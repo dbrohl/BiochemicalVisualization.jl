@@ -1,4 +1,8 @@
-function c_alphas_to_points(chain::BiochemicalAlgorithms.Chain)
+function atoms_by_fragments(chain::Chain{T}) where T
+
+end
+
+function c_alphas_to_points(chain::Chain{T}) where T
     c_alphas = []
     point_to_residue_indices = []
     for (i, fragment) in enumerate(fragments(chain))
@@ -19,7 +23,7 @@ function c_alphas_to_points(chain::BiochemicalAlgorithms.Chain)
     return c_alphas, point_to_residue_indices
 end
 
-function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_helix_points::Bool)
+function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool) where T
     # find relevant atom positions
     c_alphas = []
     oxygens = []
@@ -49,12 +53,12 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
     # m1 = reduce(merge, spheres)
     # export_mesh_to_ply("c-alpha.ply", m1)
 
-    main_points = Matrix{Float64}(undef, 3, length(c_alphas)-1)
-    minor_points = Matrix{Float64}(undef, 3, length(c_alphas)-1)
+    main_points = Matrix{T}(undef, 3, length(c_alphas)-1)
+    minor_points = Matrix{T}(undef, 3, length(c_alphas)-1)
 
     # construct planes to obtain spline control points
     current_flip = false
-    prev_D = nothing
+    prev_D::Union{Vector{T}, Nothing} = nothing
     for i=1:length(c_alphas)-1
         A = c_alphas[i+1].r - c_alphas[i].r
         B = oxygens[i].r - c_alphas[i].r
@@ -70,9 +74,9 @@ function generate_points_carson_bugg(chain::BiochemicalAlgorithms.Chain, offset_
         end
         prev_D = D
         
-        P = c_alphas[i].r + 0.5 * A
+        P = c_alphas[i].r + T(0.5) * A
         if(offset_helix_points && (structures[i]==BiochemicalAlgorithms.SecondaryStructure.HELIX || structures[i+1]==BiochemicalAlgorithms.SecondaryStructure.HELIX))
-            P += 1.5 * C
+            P += T(1.5) * C
         end
 
         main_points[:, i] = P
@@ -144,8 +148,8 @@ function sample_to_fragment_index_mapping(spline, resolution)
     return spline.sample_mapping_per_resolution[dict_key]
 end
 
-function evaluate_generic_quadruple_spline(control_points, num_points, fn)
-    result_points = Matrix(undef, 3, sum(num_points)-length(num_points)+1)
+function evaluate_generic_quadruple_spline(control_points::Matrix{T}, num_points, fn) where T
+    result_points = Matrix{T}(undef, 3, sum(num_points)-length(num_points)+1)
     i = 1
     a = 1
     while i+3 <= size(control_points, 2) # loop over quadruples of control_points

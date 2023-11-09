@@ -26,28 +26,8 @@ end
 
 # Whenever the angle between the last selected and the current tangent is too large, the current circle is added. 
 # Tangents should be normalized!
-# function filter_points_threshold(points, tangents)
-#     remaining_indices = []
-
-#     for i=axes(points, 2)
-#         if(i==firstindex(points, 2) || i==lastindex(points, 2))
-#             push!(remaining_indices, i)
-#             continue
-#         end
-
-#         dot_prod = dot(tangents[:, remaining_indices[end]], tangents[:, i])
-#         if(abs(dot_prod)>1 || abs(acos(dot_prod))> 5/360*2*π) # Numerical issues could lead to a DomainError when the dot_product is slightly larger than 1. 
-#             #log_info(point_filter, i, acos(dot_prod))
-#             push!(remaining_indices, i)
-#         end
-#     end
-
-#     log_info(point_filter, "before: $(size(points, 2)) after: $(length(remaining_indices))")
-#     return remaining_indices
-# end
-
 # assumes at least 1 in fixed indices
-function filter_points_threshold(points, q, r, s, fixed_indices, colors=nothing)
+function filter_points_threshold(points::Matrix{T}, q::Matrix{T}, r::Matrix{T}, s::Matrix{T}, fixed_indices::Vector{Int}, colors::Union{Nothing, Vector{NTuple{3, Int}}}=nothing) where T
     remaining_indices = []
     a = 0
     b = 0

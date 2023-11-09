@@ -18,7 +18,7 @@ struct Representation{T <: Real}
     end
 end
 
-function Representation(mesh::PlainMesh{T}) where {T}
+function Representation(mesh::PlainMesh{T}) where T
     p = vec(mesh.vertices)
     c = vec(mesh.connections) .- 1
 

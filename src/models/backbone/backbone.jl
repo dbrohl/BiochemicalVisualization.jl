@@ -5,7 +5,7 @@ function insert_sorted!(array, elem)
     insert!(array, index, elem)
 end
 
-function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = nothing)
+function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = nothing) # TODO types?
     if(index<1 || index>size(spline_points, 2))
         throw(ArgumentError("index has to be in [1, $(size(spline_points, 2))], but was $index"))
     end
@@ -31,10 +31,10 @@ function adjust_indices!(index_array, threshold)
     end
 end
 
-function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_residue_indices) where T<:Real
+function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_residue_indices) where T
     rectangle_widths::Vector{T} = []
-    arrow_starts = []
-    arrow_frame_indices = []
+    arrow_starts::Vector{Int} = []
+    arrow_frame_indices::Vector{Int} = []
 
     filtered_fragment_list = filter(f -> is_amino_acid(f), fragment_list)
     # determine orientation of looping (arrows point towards carboxyl-end) # TODO test if this works
@@ -117,8 +117,71 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
     return rectangle_widths, arrow_starts, arrow_frame_indices
 end
 
+function generate_geometry_at_point(
+    point::Vector{T}, 
+    normal::Vector{T}, 
+    binormal::Vector{T}, 
+    linked_residue::Union{Nothing,Fragment{T}}, 
+    frame_config::Union{Nothing,Tuple{Bool, Bool, Fragment{T}, Fragment{T}}}, 
+    fixed_color::Union{NTuple{3, Int}, Nothing}, 
+    rectangle_width::T, 
+    config::BackboneConfig) where T
+    # generate cross-section vertices
+    if(config.backbone_type==BackboneType.BACKBONE)
+        circle_points = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
+    elseif(config.backbone_type==BackboneType.RIBBON)
+        circle_points = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
+    elseif(config.backbone_type==BackboneType.CARTOON)
+        shortcut = false
+        if(linked_residue===nothing)
+            if((frame_config[1] == frame_config[2]))
+                circle_points = stack(repeat([point], config.resolution)) # TODO only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
+                shortcut = true
+            else
+                residue = frame_config[3]
+            end
+        else
+            residue = linked_residue
+        end
+
+        if(!shortcut)
+            structure = residue.properties[:SS]
+            if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
+                circle_points = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
+            elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
+                circle_points = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
+            elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
+                circle_points = create_rectangle_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
+            end
+        end
+    end 
+    # add edges
+    circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
+
+    # color
+    if(fixed_color!==nothing)
+        color!(circle, fixed_color)
+    elseif(config.color==Color.SECONDARY_STRUCTURE)
+        if(linked_residue===nothing)
+            residue = frame_config[4]
+        else
+            residue = linked_residue
+        end
+        structure = residue.properties[:SS]
+        color!(circle, get_structure_color_mapping()[structure])
+    elseif(config.color==Color.RESIDUE)
+        if(linked_residue===nothing)
+            residue = frame_config[4]
+        else
+            residue = linked_residue
+        end
+        color!(circle, get_amino_acid_color_mapping()[residue.name])
+    end
+    return circle
+end
+
 # assumes checked config (consistent and adjusted to T)
-function generate_chain_mesh(chain::Chain{T}, fixed_color::Union{Nothing, NTuple{3, Int}}, config::BackboneConfig) where {T<:Real}
+function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
     fragment_list = fragments(chain) #TODO fragments/eachfragment
 
     # construct spline
@@ -131,8 +194,8 @@ function generate_chain_mesh(chain::Chain{T}, fixed_color::Union{Nothing, NTuple
 
     vertices_per_unit = T(0.4 * config.resolution / (2*π*config.stick_radius))
     # sample along spline
-    spline_points::Matrix{T}, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, vertices_per_unit)
-    velocities::Matrix{T} = calculate_velocities(spline, vertices_per_unit)
+    spline_points, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, vertices_per_unit)
+    velocities = calculate_velocities(spline, vertices_per_unit)
     
     # construct local frames
     local q::Matrix{T}
@@ -141,7 +204,7 @@ function generate_chain_mesh(chain::Chain{T}, fixed_color::Union{Nothing, NTuple
     if(config.frame==Frame.RMF)
         q, r, s = rmf(spline_points, velocities)
     elseif(config.frame==Frame.SECOND_SPLINE)
-        second_spline_points::Matrix{T} = calculate_minor_points(spline, vertices_per_unit)
+        second_spline_points = calculate_minor_points(spline, vertices_per_unit)
         q, r, s = frames_from_two_splines(spline_points, velocities, second_spline_points)
 
 
@@ -160,7 +223,7 @@ function generate_chain_mesh(chain::Chain{T}, fixed_color::Union{Nothing, NTuple
         rainbow_colors = map(rgb->map(channel->Int(floor(channel*255)), (rgb.r, rgb.g, rgb.b)), rgb_colors)
     end
 
-    fixed_indices = [] # collection of all frames that should not be removed by filtering
+    fixed_indices::Vector{Int} = [] # collection of all frames that should not be removed by filtering
 
     # preparation for arrows
     if(config.backbone_type==BackboneType.CARTOON)
@@ -334,6 +397,9 @@ function generate_chain_mesh(chain::Chain{T}, fixed_color::Union{Nothing, NTuple
         if(config.color==Color.RAINBOW)
             fixed_color = rainbow_colors[current_index]
         end
+        if(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
+            fixed_color = (0, 0, 255)
+        end
 
         circle = generate_geometry_at_point(
             spline_points[:, current_index], 
@@ -365,64 +431,8 @@ function generate_chain_mesh(chain::Chain{T}, fixed_color::Union{Nothing, NTuple
     return spline_mesh
 end
 
-function generate_geometry_at_point(point::Vector{T}, normal::Vector{T}, binormal::Vector{T}, linked_residue::Union{Nothing,Fragment{T}}, frame_config::Union{Nothing,Tuple{Bool, Bool, Fragment{T}, Fragment{T}}}, fixed_color::Union{NTuple{3, Int}, Nothing}, rectangle_width::T, config::BackboneConfig) where T<:Real
-    # generate cross-section vertices
-    if(config.backbone_type==BackboneType.BACKBONE)
-        circle_points = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
-    elseif(config.backbone_type==BackboneType.RIBBON)
-        circle_points = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
-    elseif(config.backbone_type==BackboneType.CARTOON)
-        shortcut = false
-        if(linked_residue===nothing)
-            if((frame_config[1] == frame_config[2]))
-                circle_points = stack(repeat([point], config.resolution)) # TODO only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
-                shortcut = true
-            else
-                residue = frame_config[3]
-            end
-        else
-            residue = linked_residue
-        end
-
-        if(!shortcut)
-            structure = residue.properties[:SS]
-            if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
-                circle_points = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
-            elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
-                circle_points = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
-            elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                circle_points = create_rectangle_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
-            end
-        end
-    end 
-    # add edges
-    circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
-
-    # color
-    if(fixed_color!==nothing)
-        color!(circle, fixed_color)
-    elseif(config.color==Color.SECONDARY_STRUCTURE)
-        if(linked_residue===nothing)
-            residue = frame_config[4]
-        else
-            residue = linked_residue
-        end
-        structure = residue.properties[:SS]
-        color!(circle, get_structure_color_mapping()[structure])
-    elseif(config.color==Color.RESIDUE)
-        if(linked_residue===nothing)
-            residue = frame_config[4]
-        else
-            residue = linked_residue
-        end
-        color!(circle, get_amino_acid_color_mapping()[residue.name])
-    end
-    return circle
-end
-
-
 function prepare_backbone_model(
-    ac::AbstractAtomContainer{T}, config::BackboneConfig) where {T<:Real}
+    ac::System{T}, config::BackboneConfig) where {T<:Real}
 
     start_time = now()
     config.stick_radius = T(config.stick_radius)
@@ -459,22 +469,21 @@ function prepare_backbone_model(
                 color = chain_colors[chain_num]
             end
 
-            chain_mesh = generate_chain_mesh(chain, color, config)
+            chain_mesh = prepare_backbone_model(chain, config, color)
 
             push!(chain_meshes, chain_mesh)
         catch e
-            log_warning("Skipped chain $(c.name), because an error occured: $(e.msg)")
+            log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
         end
     end
     if(length(chain_meshes)==0)
-        throw(ErrorException("all chains had too few c_alpha atoms. Mesh could not be generated. "))
+        throw(ErrorException("No chain meshes were generated. "))
     end
     temp = merge_multiple_meshes(chain_meshes)
-    result = Representation(temp)
-    log_info(types, "Type of result: ", typeof(result))
+    log_info(types, "Type of result: ", typeof(temp))
 
-    log_info(time_info, "Generated backbone mesh in $((now()-start_time).value/1000) seconds. ($(length(result.vertices) ÷ 3) vertices)")
+    log_info(time_info, "Generated backbone mesh in $((now()-start_time).value/1000) seconds. ($(size(temp.vertices, 2)) vertices)")
 
-    return result
+    return temp
 
 end

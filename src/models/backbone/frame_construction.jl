@@ -1,8 +1,8 @@
 # based on W. Wang, B. Jüttler, D. Zheng, and Y. Liu, ‘Computation of rotation minimizing frames’, doi: 10.1145/1330511.1330513.
-function rmf(points, tangents)
-    ts = Matrix(undef, 3, size(points, 2))
-    rs = Matrix(undef, 3, size(points, 2))
-    ss = Matrix(undef, 3, size(points, 2))
+function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
+    ts = Matrix{T}(undef, 3, size(points, 2))
+    rs = Matrix{T}(undef, 3, size(points, 2))
+    ss = Matrix{T}(undef, 3, size(points, 2))
 
     for (i, col) in enumerate(eachcol(tangents))
         if(approx_zero(norm(col)))
@@ -37,21 +37,21 @@ function rmf(points, tangents)
 end
 
 # approch by M. Carson and C. E. Bugg, ‘Algorithm for ribbon models of proteins’, doi: 10.1016/0263-7855(86)80010-8.
-function frames_from_two_splines(major_spline_points, major_spline_tangents, minor_spline_points)
+function frames_from_two_splines(major_spline_points::Matrix{T}, major_spline_tangents::Matrix{T}, minor_spline_points::Matrix{T}) where T
     ts = similar(major_spline_tangents)
     rs = similar(major_spline_tangents)
     ss = similar(major_spline_tangents)
 
 
     for i=axes(major_spline_tangents, 2)
-        ts[:, i] = major_spline_tangents[:, i] / norm(major_spline_tangents[:, i])
+        ts[:, i] = major_spline_tangents[:, i] ./ norm(major_spline_tangents[:, i])
 
         # rs vectors are difference between sampled spline point and the outer spline
-        rs[:, i] = minor_spline_points[:, i] - major_spline_points[:, i]
+        rs[:, i] = minor_spline_points[:, i] .- major_spline_points[:, i]
         #project r onto plane that is perpendicular to tangent
-        rs[:, i] = rs[:, i]/norm(rs[:, i])
-        rs[:, i] = rs[:, i] - dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) * ts[:, i]
-        rs[:, i] = rs[:, i]/norm(rs[:, i])
+        rs[:, i] = rs[:, i]./norm(rs[:, i])
+        rs[:, i] = @. rs[:, i] - (dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) * ts[:, i])
+        rs[:, i] = rs[:, i]./norm(rs[:, i])
 
         # third axis is perpendicular to the tangent and r
         ss[:, i] = cross(ts[:, i], rs[:, i])

@@ -224,7 +224,8 @@ function backbone(ac; path="BALL_export_backbone.ply", config=nothing)
 	else
 		config = complete_config(config, default_config)
 	end
-	representation = prepare_backbone_model(ac, config)
+	mesh = prepare_backbone_model(ac, config)
+	representation = Representation(mesh)
 	export_mesh_representation_to_ply(path, representation)
 end 
 
@@ -247,7 +248,8 @@ function ribbon(ac; path="BALL_export_backbone.ply", config=nothing)
 	else
 		config = complete_config(config, default_config)
 	end
-	representation = prepare_backbone_model(ac, config)
+	mesh = prepare_backbone_model(ac, config)
+	representation = Representation(mesh)
 	export_mesh_representation_to_ply(path, representation)
 end
 
@@ -265,6 +267,7 @@ function cartoon(ac; path="BALL_export_backbone.ply", config::Union{PartialBackb
 	else
 		config = complete_config(config, default_config)
 	end
-	representation = prepare_backbone_model(ac, config)
+	mesh = prepare_backbone_model(ac, config)
+	representation = Representation(mesh)
 	export_mesh_representation_to_ply(path, representation)
 end 

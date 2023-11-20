@@ -31,6 +31,15 @@ function Representation(mesh::PlainMesh{T}) where T
 
 end
 
+import Base.==
+function ==(a::Representation{T}, b::Representation{U}) where {T, U}
+    return (T==U 
+    && a.primitives==b.primitives
+    && a.vertices==b.vertices 
+    && a.connections==b.connections 
+    && a.colors==b.colors)
+end
+
 
 
 MsgPack.msgpack_type(::Type{GeometryBasics.Cylinder3{T}})      where {T} = MsgPack.StructType()

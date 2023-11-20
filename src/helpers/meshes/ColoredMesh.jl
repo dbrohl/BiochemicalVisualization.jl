@@ -16,6 +16,14 @@ function ColoredMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, color::NTuple{3, In
     ColoredMesh{Dim, T, V, TP}(mesh.vertices, mesh.topology, repeat([color], length(mesh.vertices)))
 end
 
+import Base.==
+function ==(a::ColoredMesh{Dim,T,V,TP}, b::ColoredMesh{Dim2,T2,V2,TP2}) where {Dim, Dim2, T, T2, V, V2, TP, TP2}
+    return (Dim==Dim2 && T==T2 && V==V2 && TP==TP2
+    && a.vertices==b.vertices 
+    && a.topology==b.topology 
+    && a.colors==b.colors)
+end
+
 function merge(m1::ColoredMesh, m2::ColoredMesh)
     merged_mesh = Base.merge(convert(Meshes.SimpleMesh, m1), convert(Meshes.SimpleMesh, m2))
     merged_colors = [m1.colors; m2.colors]

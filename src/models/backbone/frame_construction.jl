@@ -1,4 +1,9 @@
-# based on W. Wang, B. Jüttler, D. Zheng, and Y. Liu, ‘Computation of rotation minimizing frames’, doi: 10.1145/1330511.1330513.
+"""
+Creates orthonormal frames along a series of points and their tangents. The rotation around the tangent-axis is minimized. 
+Returns normalized (tangents, normals, binormals). 
+
+based on W. Wang, B. Jüttler, D. Zheng, and Y. Liu, "Computation of rotation minimizing frames", doi: 10.1145/1330511.1330513.
+"""
 function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
     ts = Matrix{T}(undef, 3, size(points, 2))
     rs = Matrix{T}(undef, 3, size(points, 2))
@@ -6,15 +11,15 @@ function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
 
     for (i, col) in enumerate(eachcol(tangents))
         if(approx_zero(norm(col)))
-            log_info(misc, "zero length tangent in rmf (index $i/$(size(tangents, 2))): $col")
+            log_warning("zero length tangent in rmf (index $i/$(size(tangents, 2))): $col")
         end
         ts[:, i] = col ./ norm(col)
     end
 
     if(approx_zero(ts[2, 1]) && approx_zero(ts[3, 1]))
-        temp = [1; 0; 0]
-    else
         temp = [0; 1; 0]
+    else
+        temp = [1; 0; 0]
     end
     rs[:, 1] = cross(ts[:, 1], temp)
     rs[:, 1] = rs[:, 1] ./ norm(rs[:, 1])
@@ -29,14 +34,22 @@ function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
         v2 = ts[:, i+1] - t_i_L
         c2 = dot(v2, v2)
         rs[:, i+1] = r_i_L - (2/c2) * dot(v2, r_i_L) * v2
-        @assert !approx_zero(norm(rs[:, i+1])) "zero length r in rmf (index $i+1): $(rs[:, i+1]))"
+        if approx_zero(norm(rs[:, i+1]))
+            log_warning("zero length r in rmf (index $(i+1)): $(rs[:, i+1])) $(norm(rs[:, i+1]))")
+        end
         rs[:, i+1] = rs[:, i+1] ./ norm(rs[:, i+1])
         ss[:, i+1] = cross(ts[:, i+1], rs[:, i+1])
     end
     return ts, rs, ss
 end
 
-# approch by M. Carson and C. E. Bugg, ‘Algorithm for ribbon models of proteins’, doi: 10.1016/0263-7855(86)80010-8.
+"""
+Creates orthonormal frames along a series of points (derived from the major spline). 
+The normals point towards the respective points on the minor spline. 
+Returns normalized (tangents, normals, binormals). 
+
+Approch by M. Carson and C. E. Bugg, "Algorithm for ribbon models of proteins", doi: 10.1016/0263-7855(86)80010-8.
+"""
 function frames_from_two_splines(major_spline_points::Matrix{T}, major_spline_tangents::Matrix{T}, minor_spline_points::Matrix{T}) where T
     ts = similar(major_spline_tangents)
     rs = similar(major_spline_tangents)
@@ -50,7 +63,7 @@ function frames_from_two_splines(major_spline_points::Matrix{T}, major_spline_ta
         rs[:, i] = minor_spline_points[:, i] .- major_spline_points[:, i]
         #project r onto plane that is perpendicular to tangent
         rs[:, i] = rs[:, i]./norm(rs[:, i])
-        rs[:, i] = @. rs[:, i] - (dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) * ts[:, i])
+        rs[:, i] =  rs[:, i] .- (dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) .* ts[:, i])
         rs[:, i] = rs[:, i]./norm(rs[:, i])
 
         # third axis is perpendicular to the tangent and r

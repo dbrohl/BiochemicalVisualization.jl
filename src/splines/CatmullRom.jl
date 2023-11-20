@@ -60,7 +60,7 @@ end
 
 # Code adapted from https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline#Code_example_in_Python (Last access: 24.07.2023)
 function compute_catmull_rom_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
-    t0 = 0
+    t0 = T(0)
     t1 = tRecursion(P1, P0, t0)
     t2 = tRecursion(P2, P1, t1)
     t3 = tRecursion(P3, P2, t2)
@@ -85,7 +85,7 @@ function compute_catmull_rom_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, n
 end
 
 function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
-    t0 = 0
+    t0 = T(0)
     t1 = tRecursion(P1, P0, t0)
     t2 = tRecursion(P2, P1, t1)
     t3 = tRecursion(P3, P2, t2)

@@ -1,33 +1,15 @@
-# Multiple methods to filter the sampled points of a spline
+"""
+Returns the indices of points that should not be removed. 
+Whenever the angle between the last selected and the current tangent is too large, the current index is added. 
 
-function no_filter(points)
-    return axes(points, 2)
-end
-
-# Smaller lengths of the acceleration vectors correspond to a higher probability that the point gets deleted. 
-function filter_points_stoch(points, accs)
-    min_acc = minimum(norm, eachcol(accs))
-    max_acc = maximum(norm, eachcol(accs))
-
-    remaining_indices = []
-    for i=axes(points, 2)
-        relative_acc = (norm(accs[:, i])-min_acc)/(max_acc-min_acc)
-        random_bound = relative_acc*0.8 + 0.2
-
-        r = rand(Float32)
-
-        if(i==firstindex(points, 2) || i==lastindex(points, 2) || random_bound>=r)
-            push!(remaining_indices, i)
-        end
+* When colors!=nothing, too large hue distances are prevented as well.
+* Vectors in q and r should be normalized!
+* fixed_indices contains all indices that cannot be removed and will definitely be contained in teh return value. 
+"""
+function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::Vector{Int}, colors::Union{Nothing, Vector{NTuple{3, Int}}}=nothing) where T
+    if(length(fixed_indices)==0)
+        fixed_indices = [1]
     end
-    log_info(point_filter, "before: $(size(points, 2)) after: $(length(remaining_indices))")
-    return remaining_indices
-end
-
-# Whenever the angle between the last selected and the current tangent is too large, the current circle is added. 
-# Tangents should be normalized!
-# assumes at least 1 in fixed indices
-function filter_points_threshold(points::Matrix{T}, q::Matrix{T}, r::Matrix{T}, s::Matrix{T}, fixed_indices::Vector{Int}, colors::Union{Nothing, Vector{NTuple{3, Int}}}=nothing) where T
     remaining_indices = []
     a = 0
     b = 0
@@ -36,7 +18,7 @@ function filter_points_threshold(points::Matrix{T}, q::Matrix{T}, r::Matrix{T}, 
     degree_threshold = 5
     color_degree_threshold = 45
 
-    for i=axes(points, 2)
+    for i=axes(q, 2)
         if(i ∈ fixed_indices)
             push!(remaining_indices, i)
         else

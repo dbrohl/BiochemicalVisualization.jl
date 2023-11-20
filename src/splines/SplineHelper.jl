@@ -2,6 +2,10 @@ function atoms_by_fragments(chain::Chain{T}) where T
 
 end
 
+"""
+Finds c-alpha-atoms in a chain.
+Returns a list of position vectors and a list of indices (which can be used later to reference the fragments). 
+"""
 function c_alphas_to_points(chain::Chain{T}) where T
     c_alphas = []
     point_to_residue_indices = []

@@ -131,7 +131,7 @@ function generate_geometry_at_point(
     frame_config::Union{Nothing,Tuple{Bool, Bool, Fragment{T}, Fragment{T}}}, 
     rectangle_width::T, 
     fixed_color::Union{NTuple{3, Int}, Nothing}, 
-    color_dict::Union{Nothing, Dict{SecondaryStructure.T, NTuple{3, Int}}, Dict{String, NTuple{3, Int}}},
+    color_dict::Union{Nothing,  Dict{BiochemicalAlgorithms.SecondaryStructure.T, NTuple{3, Int}}, Dict{String, NTuple{3, Int}}},
     config::BackboneConfig) where T
     # generate cross-section vertices
     if(config.backbone_type==BackboneType.BACKBONE)
@@ -361,9 +361,9 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
 
         local remaining_indices::Vector{Int}
         if(config.color==Color.RAINBOW)
-            remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
+            remaining_indices = filter_points_threshold(q, r, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
         else
-            remaining_indices = filter_points_threshold(spline_points, q, r, s, fixed_indices)
+            remaining_indices = filter_points_threshold(q, r, fixed_indices)
         end
         # log_info(point_filter, "Remaining points: $(length(remaining_indices))/$(size(spline_points, 2))\n Filtered: $(size(spline_points, 2)-length(remaining_indices)) ($(length(fixed_indices)) fixed)")
         # spline_points = spline_points[:, remaining_indices]
@@ -428,7 +428,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
         push!(circles, circle)
     end
 
-    spline_mesh = connect_circles_to_tube(circles, [spline_points[:, 1], spline_points[:, end]])
+    spline_mesh = connect_circles_to_tube(circles, (spline_points[:, 1], spline_points[:, end]))
     log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
     # ----- debug export -----
@@ -483,7 +483,11 @@ function prepare_backbone_model(
 
             push!(chain_meshes, chain_mesh)
         catch e
-            log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
+            if e isa ErrorException
+                log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
+            else
+                rethrow(e)
+            end
         end
     end
     if(length(chain_meshes)==0)

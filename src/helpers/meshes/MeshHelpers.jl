@@ -1,9 +1,17 @@
 export create_circle_in_local_frame, local_frame_mesh
 
-function color!(mesh, new_color)
+"Sets the color of a PlainMesh or PlainNonStdMesh."
+function color!(mesh, new_color::NTuple{3, Int})
     mesh.colors = repeat([new_color], size(mesh.vertices, 2))
 end
 
+"""
+Returns points that form a circle in the plane given by local_y and local_z. 
+Resolution determines the number of points. 
+local_y and local_z are expected to have a length of 1. 
+
+See also [`create_ellipse_in_local_frame`](@ref), [`create_rectangle_in_local_frame`](@ref).
+"""
 function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T
     points = Matrix{T}(undef, 3, resolution)
 
@@ -13,6 +21,14 @@ function create_circle_in_local_frame(center::AbstractArray{T}, local_y::Abstrac
     return points
 end
 
+"""
+Returns points that form an ellipse/ a scaled circle in the plane given by local_y and local_z.
+half_width is the scale factor applied to local_y, half_height is applied to local_z.  
+Resolution determines the number of points. 
+local_y and local_z are expected to have a length of 1. 
+
+See also [`create_circle_in_local_frame`](@ref), [`create_rectangle_in_local_frame`](@ref).
+"""
 function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     points = Matrix{T}(undef, 3, resolution)
 
@@ -22,6 +38,13 @@ function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::Abstra
     return points
 end
 
+"""
+Returns points that form a rectangle in the plane given by local_y and local_z. 
+Resolution determines the number of points. 
+local_y and local_z are expected to have a length of 1. 
+
+See also [`create_circle_in_local_frame`](@ref), [`create_ellipse_in_local_frame`](@ref).
+"""
 function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     if(resolution<4)
         return create_ellipse_in_local_frame(center, local_y, local_z, resolution, width, height)
@@ -77,24 +100,22 @@ function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::Abst
     return points
 end
 
+"Creates a ColoredMesh representing a red, green and blue coordinate system. "
 function local_frame_mesh(local_zero, local_x, local_y, local_z)
-    x = ColoredMesh(discretize(CylinderSurface(Tuple(local_zero), Tuple(local_zero + local_x), 0.01), RegularDiscretization(6)), (255, 0, 0))
-    y = ColoredMesh(discretize(CylinderSurface(Tuple(local_zero), Tuple(local_zero + local_y), 0.01), RegularDiscretization(6)), (0, 255, 0))
-    z = ColoredMesh(discretize(CylinderSurface(Tuple(local_zero), Tuple(local_zero + local_z), 0.01), RegularDiscretization(6)), (0, 0, 255))
+    x = ColoredMesh(Meshes.discretize(Meshes.CylinderSurface(Tuple(local_zero), Tuple(local_zero + local_x), 0.01), Meshes.RegularDiscretization(6)), (255, 0, 0))
+    y = ColoredMesh(Meshes.discretize(Meshes.CylinderSurface(Tuple(local_zero), Tuple(local_zero + local_y), 0.01), Meshes.RegularDiscretization(6)), (0, 255, 0))
+    z = ColoredMesh(Meshes.discretize(Meshes.CylinderSurface(Tuple(local_zero), Tuple(local_zero + local_z), 0.01), Meshes.RegularDiscretization(6)), (0, 0, 255))
 
     a = merge(x, y)
     return merge(a, z)
 end
 
+"Creates a ColoredMesh that points from the center into the direction of vector. "
 function local_arrow_mesh(center, vector, color)
-    return ColoredMesh(discretize(CylinderSurface(0.01, Segment([Tuple(center), Tuple(center + vector)])), RegularDiscretization(6)), color)
+    return ColoredMesh(Meshes.discretize(Meshes.CylinderSurface(Tuple(center), Tuple(center + vector), 0.01), Meshes.RegularDiscretization(6)), color)
 end
 
-
-
-        
-
-# Merges multiple mesh objects into one. The geometry (vertices/edges/faces) does not change. 
+"Merges multiple mesh objects into one. The geometry (vertices/edges/faces) does not change. "
 function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
     num_points = sum(map(m -> size(m.vertices, 2), meshes))
     num_connects = sum(map(m -> size(m.connections, 2), meshes))
@@ -128,8 +149,15 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
     return PlainMesh{T}(points, connects, colors)
 end
 
-# Adds faces between circles to create the surface of a tube. 
-function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints = nothing) where {T}
+"""
+Adds faces between circles to create the surface of a tube. 
+When endpoints is passed to the function, the tube will be closed (by a flat plane) at the start and the end. 
+"""
+function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints::Union{Nothing, NTuple{2, Vector{T}}} = nothing) where {T}
+
+    if(length(circles)==0)
+        return PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
+    end
 
     resolution = size(circles[1].vertices, 2)
 

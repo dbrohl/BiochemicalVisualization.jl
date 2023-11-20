@@ -32,6 +32,7 @@ end # TODO hybrid?
     ANGLE
 end
 
+"Collection of parameters that determine how backbone-based vizualizations are created. "
 mutable struct BackboneConfig
     stick_radius::Real
     resolution::Int
@@ -44,6 +45,19 @@ mutable struct BackboneConfig
     filter::Filter.T
 end
 
+import Base.==
+function ==(a::BackboneConfig, b::BackboneConfig)
+    return (a.stick_radius==b.stick_radius
+    && a.resolution==b.resolution 
+    && a.backbone_type==b.backbone_type 
+    && a.color==b.color
+    && a.spline==b.spline
+    && a.control_point_strategy==b.control_point_strategy
+    && a.frame==b.frame
+    && a.filter==b.filter)
+end
+
+"Similar to BackboneConfig, but the datatypes include Nothing"
 mutable struct PartialBackboneConfig
     stick_radius::Union{Real, Nothing}
     resolution::Union{Int, Nothing}
@@ -66,6 +80,17 @@ function PartialBackboneConfig(;
     frame = nothing, 
     filter = nothing)
     return PartialBackboneConfig(stick_radius, resolution, backbone_type, color, spline, control_point_strategy, frame, filter)
+end
+
+function ==(a::PartialBackboneConfig, b::PartialBackboneConfig)
+    return (a.stick_radius==b.stick_radius
+    && a.resolution==b.resolution 
+    && a.backbone_type==b.backbone_type 
+    && a.color==b.color
+    && a.spline==b.spline
+    && a.control_point_strategy==b.control_point_strategy
+    && a.frame==b.frame
+    && a.filter==b.filter)
 end
 
 function complete_config(partial::PartialBackboneConfig, template::BackboneConfig)

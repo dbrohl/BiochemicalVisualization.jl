@@ -26,7 +26,7 @@ mutable struct CubicB{T <: Real}
         elseif(control_point_strategy==ControlPoints.MID_POINTS)
             major_points, minor_points, point_to_residue_indices = generate_points_carson_bugg(chain, true)
 
-            major_points = [major_points[:, 1] major_points major_points[:, end]]
+            major_points = [major_points[:, 1] major_points major_points[:, end]] #alloc
             minor_points = [minor_points[:, 1] minor_points minor_points[:, end]]
 
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
@@ -52,7 +52,7 @@ function calculate_minor_points(spline::CubicB, resolution)
     return evaluate_generic_quadruple_spline(spline.minorControlPoints, num_points(spline, resolution), compute_cubicb_quadruple)
 end
 
-function compute_cubicb_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
+function compute_cubicb_quadruple((P0, P1, P2, P3)::NTuple{4, AbstractVector{T}}, num_points::Int) where T
 
     result_points = Matrix{T}(undef, 3, num_points)
 
@@ -73,7 +73,7 @@ function compute_cubicb_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_po
     return result_points
 end
 
-function compute_cubicb_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
+function compute_cubicb_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, AbstractVector{T}}, num_points::Int) where T
     result_points = Matrix{T}(undef, 3, num_points)
 
     M = [1 4 1 0

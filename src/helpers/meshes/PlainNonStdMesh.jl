@@ -10,7 +10,9 @@ end
 
 
 function PlainNonStdMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, colors::AbstractVector{NTuple{3, Int}}) where {Dim, T, V, TP}
-    @assert length(colors)==length(mesh.vertices)
+    if length(colors)!=length(mesh.vertices)
+        throw(ErrorException("Different number of vertices and colors. "))
+    end
 
     vertices = hcat([collect(v.coords.coords) for v in mesh.vertices]...)
 

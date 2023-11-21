@@ -2,7 +2,9 @@ export create_circle_in_local_frame, local_frame_mesh
 
 "Sets the color of a PlainMesh or PlainNonStdMesh."
 function color!(mesh, new_color::NTuple{3, Int})
-    mesh.colors = repeat([new_color], size(mesh.vertices, 2))
+    for i=1:length(mesh.colors)
+        mesh.colors[i] = new_color
+    end
 end
 
 """
@@ -15,8 +17,8 @@ See also [`create_ellipse_in_local_frame`](@ref), [`create_rectangle_in_local_fr
 function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T
     points = Matrix{T}(undef, 3, resolution)
 
-    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
-        points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
+    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1]) #alloc
+        @. points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
     end
     return points
 end
@@ -32,8 +34,8 @@ See also [`create_circle_in_local_frame`](@ref), [`create_rectangle_in_local_fra
 function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     points = Matrix{T}(undef, 3, resolution)
 
-    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1])
-        points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
+    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1]) #alloc
+        @. points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
     end
     return points
 end
@@ -69,32 +71,32 @@ function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::Abst
     half_width = half_width*local_y
     half_height = half_height*local_z
     a = 1
-    for y in collect(range(0, 1, A+2))[2:end-1]
-        points[:, a] = center + half_width + y*half_height
+    for y in collect(range(0, 1, A+2))[2:end-1] #alloc
+        @. points[:, a] = center + half_width + y*half_height
         a+=1
     end
-    points[:, a] = center + half_width + half_height
+    @. points[:, a] = center + half_width + half_height
     a+=1
-    for x in collect(range(1, -1, B+2))[2:end-1]
-        points[:, a] = center + x*half_width + half_height
+    for x in collect(range(1, -1, B+2))[2:end-1] #alloc
+        @. points[:, a] = center + x*half_width + half_height
         a+=1
     end
-    points[:, a] = center - half_width + half_height
+    @. points[:, a] = center - half_width + half_height
     a+=1
-    for y in collect(range(1, -1, C+2))[2:end-1]
-        points[:, a] = center - half_width + y*half_height
+    for y in collect(range(1, -1, C+2))[2:end-1] #alloc
+        @. points[:, a] = center - half_width + y*half_height
         a+=1
     end
-    points[:, a] = center - half_width - half_height
+    @. points[:, a] = center - half_width - half_height
     a+=1
-    for x in collect(range(-1, 1, D+2))[2:end-1]
-        points[:, a] = center + x*half_width - half_height
+    for x in collect(range(-1, 1, D+2))[2:end-1] #alloc
+        @. points[:, a] = center + x*half_width - half_height
         a+=1
     end
-    points[:, a] = center + half_width - half_height
+    @. points[:, a] = center + half_width - half_height
     a+=1
-    for y in collect(range(-1, 0, E+2))[2:end-1]
-        points[:, a] = center + half_width + y*half_height
+    for y in collect(range(-1, 0, E+2))[2:end-1] #alloc
+        @. points[:, a] = center + half_width + y*half_height
         a+=1
     end
     return points
@@ -153,7 +155,7 @@ end
 Adds faces between circles to create the surface of a tube. 
 When endpoints is passed to the function, the tube will be closed (by a flat plane) at the start and the end. 
 """
-function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints::Union{Nothing, NTuple{2, Vector{T}}} = nothing) where {T}
+function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints::Union{Nothing, NTuple{2, AbstractVector{T}}} = nothing) where {T}
 
     if(length(circles)==0)
         return PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())

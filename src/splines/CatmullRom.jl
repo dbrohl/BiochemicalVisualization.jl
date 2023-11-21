@@ -30,7 +30,7 @@ mutable struct CatmullRom{T<:Real}
 
             # add first and last dummy point
             # control points cannot be the same (otherwise the sampling produces NaN values)
-            major_points = [major_points[:, 1]-(major_points[:,2]-major_points[:,1]) major_points major_points[:, end]-(major_points[:, end]-major_points[:, end-1])]
+            major_points = [major_points[:, 1]-(major_points[:,2]-major_points[:,1]) major_points major_points[:, end]-(major_points[:, end]-major_points[:, end-1])] #allocs
             minor_points = [minor_points[:, 1]-(minor_points[:,2]-minor_points[:,1]) minor_points minor_points[:, end]-(minor_points[:, end]-minor_points[:, end-1])]
 
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
@@ -59,7 +59,7 @@ end
 
 
 # Code adapted from https://en.wikipedia.org/wiki/Centripetal_Catmull%E2%80%93Rom_spline#Code_example_in_Python (Last access: 24.07.2023)
-function compute_catmull_rom_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
+function compute_catmull_rom_quadruple((P0, P1, P2, P3)::NTuple{4, AbstractVector{T}}, num_points::Int) where T
     t0 = T(0)
     t1 = tRecursion(P1, P0, t0)
     t2 = tRecursion(P2, P1, t1)
@@ -84,7 +84,7 @@ function compute_catmull_rom_quadruple((P0, P1, P2, P3)::NTuple{4, Vector{T}}, n
     return result_points
 end
 
-function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Vector{T}}, num_points::Int) where T
+function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, AbstractVector{T}}, num_points::Int) where T
     t0 = T(0)
     t1 = tRecursion(P1, P0, t0)
     t2 = tRecursion(P2, P1, t1)
@@ -115,7 +115,7 @@ function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Ve
     return result_velocities
 end
 
-function tRecursion(pCurr::Vector{T}, pPrev::Vector{T}, tPrev::T) where T
+function tRecursion(pCurr::AbstractVector{T}, pPrev::AbstractVector{T}, tPrev::T) where T
     distance = norm(pCurr .- pPrev)
     return distance^ (T(0.5)) + tPrev
 end

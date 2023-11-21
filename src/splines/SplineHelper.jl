@@ -104,7 +104,7 @@ function calculate_resolution_dependent_data(spline, resolution)
     sample_mapping = []
     i = 1
     while i+3 <= size(spline.controlPoints, 2)
-        distance = norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
+        distance = @views norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
         push!(num_points, max(2, convert(Int, ceil(resolution * 1 * distance)))) #TODO factor
 
         if(spline.controlPointStrategy==ControlPoints.C_ALPHA)
@@ -157,8 +157,7 @@ function evaluate_generic_quadruple_spline(control_points::Matrix{T}, num_points
     i = 1
     a = 1
     while i+3 <= size(control_points, 2) # loop over quadruples of control_points
-        points = fn((control_points[:, i], control_points[:, i+1], control_points[:, i+2], control_points[:, i+3]), num_points[i])
-        result_points[:, a:a+num_points[i]-1] = points
+        result_points[:, a:a+num_points[i]-1] = @views fn((control_points[:, i], control_points[:, i+1], control_points[:, i+2], control_points[:, i+3]), num_points[i])
         a += num_points[i]-1
         i += 1  
     end

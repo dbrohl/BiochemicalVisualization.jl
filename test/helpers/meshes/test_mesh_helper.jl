@@ -8,12 +8,14 @@
     colors = [(0, 0, 0), (255, 0, 0), (0, 255, 0)]
     white = [(255, 255, 255), (255, 255, 255), (255, 255, 255)]
     
-    plain_mesh = PlainMesh(points, reshape([1, 2, 3], (3, 1)), colors)
+    plain_mesh = PlainMesh(points, reshape([1, 2, 3], (3, 1)), copy(colors))
     @test plain_mesh.colors!=white
     color!(plain_mesh, (255, 255, 255))
     @test plain_mesh.colors==white
 
-    nonstd_plain_mesh = PlainNonStdMesh(points, [[1,2,3]], colors)
+    println("A", colors)
+
+    nonstd_plain_mesh = PlainNonStdMesh(points, [[1,2,3]], copy(colors))
     @test nonstd_plain_mesh.colors!=white
     color!(nonstd_plain_mesh, (255, 255, 255))
     @test nonstd_plain_mesh.colors==white

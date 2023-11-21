@@ -15,14 +15,14 @@ function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to
     if(index<1 || index>size(spline_points, 2))
         throw(ArgumentError("index has to be in [1, $(size(spline_points, 2))], but was $index"))
     end
-    spline_points = hcat(spline_points[:, 1:index], spline_points[:, index], spline_points[:, index+1:end])
-    q = hcat(q[:, 1:index], q[:, index], q[:, index+1:end])
-    r = hcat(r[:, 1:index], r[:, index], r[:, index+1:end])
-    s = hcat(s[:, 1:index], s[:, index], s[:, index+1:end])
-    rectangle_widths = vcat(rectangle_widths[1:index], rectangle_widths[index], rectangle_widths[index+1:end])
-    sample_to_residue_indices = vcat(sample_to_residue_indices[1:index], sample_to_residue_indices[index], sample_to_residue_indices[index+1:end])
+    spline_points = @views hcat(spline_points[:, 1:index], spline_points[:, index], spline_points[:, index+1:end])
+    q = @views hcat(q[:, 1:index], q[:, index], q[:, index+1:end])
+    r = @views hcat(r[:, 1:index], r[:, index], r[:, index+1:end])
+    s = @views hcat(s[:, 1:index], s[:, index], s[:, index+1:end])
+    rectangle_widths = @views vcat(rectangle_widths[1:index], rectangle_widths[index], rectangle_widths[index+1:end])
+    sample_to_residue_indices = @views vcat(sample_to_residue_indices[1:index], sample_to_residue_indices[index], sample_to_residue_indices[index+1:end])
     if(rainbow_colors !== nothing)
-        rainbow_colors = vcat(rainbow_colors[1:index], rainbow_colors[index], rainbow_colors[index+1:end])
+        rainbow_colors = @views vcat(rainbow_colors[1:index], rainbow_colors[index], rainbow_colors[index+1:end])
     end
 
     return spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors
@@ -124,9 +124,9 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
 end
 
 function generate_geometry_at_point(
-    point::Vector{T}, 
-    normal::Vector{T}, 
-    binormal::Vector{T}, 
+    point::AbstractVector{T}, 
+    normal::AbstractVector{T}, 
+    binormal::AbstractVector{T}, 
     linked_residue::Union{Nothing,Fragment{T}}, 
     frame_config::Union{Nothing,Tuple{Bool, Bool, Fragment{T}, Fragment{T}}}, 
     rectangle_width::T, 
@@ -163,7 +163,7 @@ function generate_geometry_at_point(
         end
     end 
     # add edges
-    circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}())
+    circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}(undef, config.resolution))
 
     # color
     if(fixed_color!==nothing)
@@ -399,7 +399,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             continue
         end
         # sanity check: frame should be orthogonal
-        if(!approx_zero(dot(q[:, current_index], r[:, current_index])) || !approx_zero(dot(q[:, current_index], s[:, current_index])) || !approx_zero(dot(s[:, current_index], r[:, current_index])))
+        @views if(!approx_zero(dot(q[:, current_index], r[:, current_index])) || !approx_zero(dot(q[:, current_index], s[:, current_index])) || !approx_zero(dot(s[:, current_index], r[:, current_index])))
             log_info(frame_rotation, current_index, " wrong angles ", dot(q[:, current_index], r[:, current_index]), " ", dot(q[:, current_index], s[:, current_index]), " ", dot(s[:, current_index], r[:, current_index]), " # ", q[:, current_index], " ", r[:, current_index], " ", s[:, current_index])
         end
 
@@ -414,7 +414,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             fixed_color = (0, 0, 255)
         end
 
-        circle = generate_geometry_at_point(
+        circle = @views generate_geometry_at_point(
             spline_points[:, current_index], 
             r[:, current_index], 
             s[:, current_index], 
@@ -428,7 +428,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
         push!(circles, circle)
     end
 
-    spline_mesh = connect_circles_to_tube(circles, (spline_points[:, 1], spline_points[:, end]))
+    spline_mesh = connect_circles_to_tube(circles, @views (spline_points[:, 1], spline_points[:, end]))
     log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
     # ----- debug export -----
@@ -466,7 +466,7 @@ function prepare_backbone_model(
     if(config.color==Color.UNIFORM)
         uniform_color = (255, 0, 0)
     elseif(config.color==Color.CHAIN)
-        chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end])
+        chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end]) #alloc
     end
 
     chain_meshes::Vector{PlainMesh{T}} = []

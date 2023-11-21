@@ -6,8 +6,8 @@ Whenever the angle between the last selected and the current tangent is too larg
 * Vectors in q and r should be normalized!
 * fixed_indices contains all indices that cannot be removed and will definitely be contained in teh return value. 
 """
-function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::Vector{Int}, colors::Union{Nothing, Vector{NTuple{3, Int}}}=nothing) where T
-    if(length(fixed_indices)==0)
+function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::AbstractVector{Int}, colors::Union{Nothing, AbstractVector{NTuple{3, Int}}}=nothing) where T
+    if isempty(fixed_indices)
         fixed_indices = [1]
     end
     remaining_indices = []
@@ -22,12 +22,12 @@ function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::Vect
         if(i ∈ fixed_indices)
             push!(remaining_indices, i)
         else
-            dot_prod_q = dot(q[:, remaining_indices[end]], q[:, i])
+            dot_prod_q = @views dot(q[:, remaining_indices[end]], q[:, i])
             if(abs(dot_prod_q)>1 || abs(acos(dot_prod_q))> degree_threshold/360*2*π) # Numerical issues could lead to a DomainError when the dot_product is slightly larger than 1.
                 a+=1 
             end
 
-            dot_prod_r = dot(r[:, remaining_indices[end]], r[:, i])
+            dot_prod_r = @views dot(r[:, remaining_indices[end]], r[:, i])
             if(abs(dot_prod_r)>1 || abs(acos(dot_prod_r))> degree_threshold/360*2*π) # Numerical issues could lead to a DomainError when the dot_product is slightly larger than 1.
                 b+=1 
             end

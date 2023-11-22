@@ -30,8 +30,8 @@ mutable struct CatmullRom{T<:Real}
 
             # add first and last dummy point
             # control points cannot be the same (otherwise the sampling produces NaN values)
-            major_points = [major_points[:, 1]-(major_points[:,2]-major_points[:,1]) major_points major_points[:, end]-(major_points[:, end]-major_points[:, end-1])] #allocs
-            minor_points = [minor_points[:, 1]-(minor_points[:,2]-minor_points[:,1]) minor_points minor_points[:, end]-(minor_points[:, end]-minor_points[:, end-1])]
+            major_points = [major_points[:, 1]-(major_points[:,2]-major_points[:,1]) major_points major_points[:, end]+(major_points[:, end]-major_points[:, end-1])] #allocs
+            minor_points = [minor_points[:, 1]-(minor_points[:,2]-minor_points[:,1]) minor_points minor_points[:, end]+(minor_points[:, end]-minor_points[:, end-1])]
 
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
@@ -69,17 +69,21 @@ function compute_catmull_rom_quadruple((P0, P1, P2, P3)::NTuple{4, AbstractVecto
 
     ts = collect(range(t1, t2, num_points))
 
+    A1 = Vector{T}(undef, 3)
+    A2 = Vector{T}(undef, 3)
+    A3 = Vector{T}(undef, 3)
+    B1 = Vector{T}(undef, 3)
+    B2 = Vector{T}(undef, 3)
+
     for (i, t) in enumerate(ts)
-        A1 = @. (t1-t)/(t1-t0) * P0 + (t-t0)/(t1-t0) * P1
-        A2 = @. (t2-t)/(t2-t1) * P1 + (t-t1)/(t2-t1) * P2
-        A3 = @. (t3-t)/(t3-t2) * P2 + (t-t2)/(t3-t2) * P3
+        @. A1 = (t1-t)/(t1-t0) * P0 + (t-t0)/(t1-t0) * P1
+        @. A2 = (t2-t)/(t2-t1) * P1 + (t-t1)/(t2-t1) * P2
+        @. A3 = (t3-t)/(t3-t2) * P2 + (t-t2)/(t3-t2) * P3
 
-        B1 = @. (t2-t)/(t2-t0) * A1 + (t-t0)/(t2-t0) * A2
-        B2 = @. (t3-t)/(t3-t1) * A2 + (t-t1)/(t3-t1) * A3
+        @. B1 = (t2-t)/(t2-t0) * A1 + (t-t0)/(t2-t0) * A2
+        @. B2 = (t3-t)/(t3-t1) * A2 + (t-t1)/(t3-t1) * A3
 
-        C = @. (t2-t)/(t2-t1) * B1 + (t-t1)/(t2-t1) * B2
-
-        result_points[:, i] = C
+        @. result_points[:, i] = (t2-t)/(t2-t1) * B1 + (t-t1)/(t2-t1) * B2
     end
     return result_points
 end
@@ -93,29 +97,37 @@ function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Ab
     result_velocities = Matrix{T}(undef, 3, num_points)
     ts = collect(range(t1, t2, num_points))
 
-    for (i, t) in enumerate(ts)
-        A1 = @. (t1-t)/(t1-t0) * P0 + (t-t0)/(t1-t0) * P1
-        A2 = @. (t2-t)/(t2-t1) * P1 + (t-t1)/(t2-t1) * P2
-        A3 = @. (t3-t)/(t3-t2) * P2 + (t-t2)/(t3-t2) * P3
+    A1 = Vector{T}(undef, 3)
+    A2 = Vector{T}(undef, 3)
+    A3 = Vector{T}(undef, 3)
+    B1 = Vector{T}(undef, 3)
+    B2 = Vector{T}(undef, 3)
+    A1v = Vector{T}(undef, 3)
+    A2v = Vector{T}(undef, 3)
+    A3v = Vector{T}(undef, 3)
+    B1v = Vector{T}(undef, 3)
+    B2v = Vector{T}(undef, 3)
 
-        B1 = @. (t2-t)/(t2-t0) * A1 + (t-t0)/(t2-t0) * A2
-        B2 = @. (t3-t)/(t3-t1) * A2 + (t-t1)/(t3-t1) * A3
+    for (i, t) in enumerate(ts)
+        @. A1 = (t1-t)/(t1-t0) * P0 + (t-t0)/(t1-t0) * P1
+        @. A2 = (t2-t)/(t2-t1) * P1 + (t-t1)/(t2-t1) * P2
+        @. A3 = (t3-t)/(t3-t2) * P2 + (t-t2)/(t3-t2) * P3
+
+        @. B1 = (t2-t)/(t2-t0) * A1 + (t-t0)/(t2-t0) * A2
+        @. B2 = (t3-t)/(t3-t1) * A2 + (t-t1)/(t3-t1) * A3
 
         # ----- first derivative -----
-        A1v = @. -1/(t1-t0)*P0 + 1/(t1-t0)*P1
-        A2v = @. -1/(t2-t1)*P1 + 1/(t2-t1)*P2
-        A3v = @. -1/(t3-t2)*P2 + 1/(t3-t2)*P3
+        @. A1v = -1/(t1-t0)*P0 + 1/(t1-t0)*P1
+        @. A2v = -1/(t2-t1)*P1 + 1/(t2-t1)*P2
+        @. A3v = -1/(t3-t2)*P2 + 1/(t3-t2)*P3
 
-        B1v = @. -1/(t2-t0)*A1 + (t2-t)/(t2-t0)*A1v + 1/(t2-t0)*A2 + (t-t0)/(t2-t0)*A2v
-        B2v = @. -1/(t3-t1)*A2 + (t3-t)/(t3-t1)*A2v + 1/(t3-t1)*A3 + (t-t1)/(t3-t1)*A3v
-        Cv  = @. -1/(t2-t1)*B1 + (t2-t)/(t2-t1)*B1v + 1/(t2-t1)*B2 + (t-t1)/(t2-t1)*B2v
-
-        result_velocities[:, i] = Cv
+        @. B1v = -1/(t2-t0)*A1 + (t2-t)/(t2-t0)*A1v + 1/(t2-t0)*A2 + (t-t0)/(t2-t0)*A2v
+        @. B2v = -1/(t3-t1)*A2 + (t3-t)/(t3-t1)*A2v + 1/(t3-t1)*A3 + (t-t1)/(t3-t1)*A3v
+        @. result_velocities[:, i] = -1/(t2-t1)*B1 + (t2-t)/(t2-t1)*B1v + 1/(t2-t1)*B2 + (t-t1)/(t2-t1)*B2v
     end
     return result_velocities
 end
 
 function tRecursion(pCurr::AbstractVector{T}, pPrev::AbstractVector{T}, tPrev::T) where T
-    distance = norm(pCurr .- pPrev)
-    return distance^ (T(0.5)) + tPrev
+    return norm(pCurr .- pPrev) ^ (T(0.5)) + tPrev
 end

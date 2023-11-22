@@ -67,7 +67,7 @@ function compute_cubicb_quadruple((P0, P1, P2, P3)::NTuple{4, AbstractVector{T}}
 
     t_matrix::Matrix{T} = [1 0 0 0]
     for (i, t) in enumerate(sampling_range)
-        t_matrix[:, 2:4] = [t t^2 t^3]
+        t_matrix[1, 2:4] = [t t^2 t^3]
         result_points[:, i] = t_matrix * fixed_part
     end
     return result_points
@@ -86,7 +86,7 @@ function compute_cubicb_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Abstrac
     sampling_range = range(T(0), T(1), num_points)
     t_matrix::Matrix{T} = [0 1 0 0]
     for (i, t) in enumerate(sampling_range)
-        t_matrix[:, 3:4] = [2*t 3*t^2]
+        t_matrix[1, 3:4] = [2*t 3*t^2]
         result_points[:, i] = t_matrix * fixed_part
     end
     return result_points

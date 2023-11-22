@@ -17,7 +17,7 @@ See also [`create_ellipse_in_local_frame`](@ref), [`create_rectangle_in_local_fr
 function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T
     points = Matrix{T}(undef, 3, resolution)
 
-    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1]) #alloc
+    for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
     end
     return points
@@ -34,7 +34,7 @@ See also [`create_circle_in_local_frame`](@ref), [`create_rectangle_in_local_fra
 function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     points = Matrix{T}(undef, 3, resolution)
 
-    for (i, α) in enumerate(collect(range(0, 2*π, length=resolution+1))[1:end-1]) #alloc
+    for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
     end
     return points
@@ -71,31 +71,31 @@ function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::Abst
     half_width = half_width*local_y
     half_height = half_height*local_z
     a = 1
-    for y in collect(range(0, 1, A+2))[2:end-1] #alloc
+    for y in range(0, 1, A+2)[2:end-1]
         @. points[:, a] = center + half_width + y*half_height
         a+=1
     end
     @. points[:, a] = center + half_width + half_height
     a+=1
-    for x in collect(range(1, -1, B+2))[2:end-1] #alloc
+    for x in range(1, -1, B+2)[2:end-1]
         @. points[:, a] = center + x*half_width + half_height
         a+=1
     end
     @. points[:, a] = center - half_width + half_height
     a+=1
-    for y in collect(range(1, -1, C+2))[2:end-1] #alloc
+    for y in range(1, -1, C+2)[2:end-1]
         @. points[:, a] = center - half_width + y*half_height
         a+=1
     end
     @. points[:, a] = center - half_width - half_height
     a+=1
-    for x in collect(range(-1, 1, D+2))[2:end-1] #alloc
+    for x in range(-1, 1, D+2)[2:end-1]
         @. points[:, a] = center + x*half_width - half_height
         a+=1
     end
     @. points[:, a] = center + half_width - half_height
     a+=1
-    for y in collect(range(-1, 0, E+2))[2:end-1] #alloc
+    for y in range(-1, 0, E+2)[2:end-1]
         @. points[:, a] = center + half_width + y*half_height
         a+=1
     end
@@ -125,7 +125,7 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
     points = Matrix{T}(undef, 3, num_points)
     a = 1
     for m in meshes
-        points[:, a:a+size(m.vertices, 2)-1] = m.vertices
+        points[:, a:a+size(m.vertices, 2)-1] .= m.vertices
         a += size(m.vertices, 2)
     end
 
@@ -142,7 +142,7 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
         colors[point_offset+1 : point_offset+point_len] = m.colors
         
 
-        connects[:, connect_offset+1 : connect_offset+connect_len] = m.connections .+ point_offset
+        connects[:, connect_offset+1 : connect_offset+connect_len] .= m.connections .+ point_offset
 
         point_offset += point_len
         connect_offset += connect_len

@@ -116,7 +116,7 @@ function calculate_resolution_dependent_data(spline, resolution)
 
             push!(sample_mapping, 
                     repeat([spline.point_to_residue_indices[i+1]], first_half_num)..., 
-                    repeat([spline.point_to_residue_indices[i+2]], second_half_num)...)
+                    repeat([spline.point_to_residue_indices[i+2]], second_half_num)...) #alloc
         elseif(spline.controlPointStrategy==ControlPoints.MID_POINTS)
             repeats = num_points[end]
             if(i+3!=size(spline.controlPoints, 2))

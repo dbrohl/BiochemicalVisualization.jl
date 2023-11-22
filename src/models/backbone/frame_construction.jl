@@ -13,7 +13,7 @@ function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
         if(approx_zero(norm(col)))
             log_warning("zero length tangent in rmf (index $i/$(size(tangents, 2))): $col")
         end
-        @. ts[:, i] = col / norm(col)
+        ts[:, i] .= col ./ norm(col)
     end
 
     if(approx_zero(ts[2, 1]) && approx_zero(ts[3, 1]))
@@ -26,12 +26,16 @@ function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
 
     ss[:, 1] = cross(ts[:, 1], rs[:, 1])
 
+    v1 = Vector{T}(undef, 3)
+    v2 = Vector{T}(undef, 3)
+    r_i_L = Vector{T}(undef, 3)
+    t_i_L = Vector{T}(undef, 3)
     @views for i=1:size(points, 2)-1
-        v1 = @. points[:, i+1] - points[:, i]
+        v1 .= points[:, i+1] .- points[:, i]
         c1 = dot(v1,v1)
-        r_i_L = rs[:, i] .- ((2/c1) * dot(v1, rs[:, i])) .* v1
-        t_i_L = ts[:, i] .- ((2/c1) * dot(v1, ts[:, i])) .* v1
-        v2 = ts[:, i+1] - t_i_L
+        r_i_L .= rs[:, i] .- ((2/c1) * dot(v1, rs[:, i])) .* v1
+        t_i_L .= ts[:, i] .- ((2/c1) * dot(v1, ts[:, i])) .* v1
+        v2 .= ts[:, i+1] .- t_i_L
         c2 = dot(v2, v2)
         rs[:, i+1] .= r_i_L .- ((2/c2) * dot(v2, r_i_L)) .* v2
         if approx_zero(norm(rs[:, i+1]))

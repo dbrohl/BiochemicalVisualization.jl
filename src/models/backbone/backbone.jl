@@ -174,7 +174,7 @@ function generate_geometry_at_point(
         else
             residue = linked_residue
         end
-        structure = residue.properties[:SS]
+        structure = residue.properties[:SS] #runtime
         color!(circle, color_dict[structure])
     elseif(config.color==Color.RESIDUE)
         if(linked_residue===nothing)
@@ -201,7 +201,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
 
     vertices_per_unit = T(0.4 * config.resolution / (2*π*config.stick_radius))
     # sample along spline
-    spline_points, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, vertices_per_unit)
+    spline_points, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, vertices_per_unit) #alloc
     velocities = calculate_velocities(spline, vertices_per_unit)
     
     # construct local frames
@@ -223,7 +223,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
         # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 0, 0)), eachcol(second_spline_points)))
         # export_mesh_to_ply("outer_points_new.ply", debug_mesh)
     end
-
     if(config.color==Color.RAINBOW)
         color_range = range(HSV(0,1,1), stop=HSV(360,1,1), length=size(spline_points, 2))
         rgb_colors = map(hsv-> convert(RGB, hsv), color_range)
@@ -356,10 +355,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
                 prev_was_nothing = false
             end
         end
-        sort!(fixed_indices)
-        unique!(fixed_indices)
 
-        local remaining_indices::Vector{Int}
+        local remaining_indices::Set{Int}
         if(config.color==Color.RAINBOW)
             remaining_indices = filter_points_threshold(q, r, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
         else

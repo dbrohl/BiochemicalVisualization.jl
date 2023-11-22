@@ -4,53 +4,44 @@ Whenever the angle between the last selected and the current tangent is too larg
 
 * When colors!=nothing, too large hue distances are prevented as well.
 * Vectors in q and r should be normalized!
-* fixed_indices contains all indices that cannot be removed and will definitely be contained in teh return value. 
+* fixed_indices contains all indices that cannot be removed and will definitely be contained in the return value. 
 """
 function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::AbstractVector{Int}, colors::Union{Nothing, AbstractVector{NTuple{3, Int}}}=nothing) where T
-    if isempty(fixed_indices)
-        fixed_indices = [1]
-    end
-    remaining_indices = []
-    a = 0
-    b = 0
-    c = 0
+    remaining_indices = Set(fixed_indices)
+    push!(remaining_indices, 1)
+    last_remaining_index = 1
 
     degree_threshold = 5
+    radian_threshold = degree_threshold/360*2*π 
     color_degree_threshold = 45
 
-    for i=axes(q, 2)
-        if(i ∈ fixed_indices)
-            push!(remaining_indices, i)
-        else
-            dot_prod_q = @views dot(q[:, remaining_indices[end]], q[:, i])
-            if(abs(dot_prod_q)>1 || abs(acos(dot_prod_q))> degree_threshold/360*2*π) # Numerical issues could lead to a DomainError when the dot_product is slightly larger than 1.
-                a+=1 
-            end
+    dot_prod_q = T(0)
+    dot_prod_r = T(0)
+    large_color_distance = false
 
-            dot_prod_r = @views dot(r[:, remaining_indices[end]], r[:, i])
-            if(abs(dot_prod_r)>1 || abs(acos(dot_prod_r))> degree_threshold/360*2*π) # Numerical issues could lead to a DomainError when the dot_product is slightly larger than 1.
-                b+=1 
-            end
+    for i=axes(q, 2)
+        if(i ∈ remaining_indices)
+            last_remaining_index = i
+        else
+            dot_prod_q = @views dot(q[:, last_remaining_index], q[:, i]) # alloc
+            dot_prod_r = @views dot(r[:, last_remaining_index], r[:, i])
 
             large_color_distance = false
             if(colors!==nothing)
-                colA = convert(HSL, RGB(colors[remaining_indices[end]]./255...))
-                colB = convert(HSL, RGB(colors[i]./255...))
+                colA = convert(HSL, RGB(colors[last_remaining_index]./255...)).h
+                colB = convert(HSL, RGB(colors[i]./255...)).h
 
-                if(abs(colA.h-colB.h)>color_degree_threshold) 
-                    large_color_distance = true
-                    c += 1
-                end
+                large_color_distance = abs(colA-colB)>color_degree_threshold
             end
 
-            if(abs(dot_prod_q)>1 || abs(acos(dot_prod_q))> degree_threshold/360*2*π 
-                || abs(dot_prod_r)>1 || abs(acos(dot_prod_r))> degree_threshold/360*2*π
+            if(abs(dot_prod_q)>1 || abs(acos(dot_prod_q))> radian_threshold
+                || abs(dot_prod_r)>1 || abs(acos(dot_prod_r))> radian_threshold
                 || large_color_distance)
                 push!(remaining_indices, i)
+                last_remaining_index = i
             end
 
         end
     end
-    log_info(point_filter, "filtered by tangents: $a, filtered by normals: $b, filtered by color: $c")
     return remaining_indices
 end

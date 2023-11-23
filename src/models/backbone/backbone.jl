@@ -357,11 +357,11 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             end
         end
 
-        local remaining_indices::Set{Int}
+        local remaining_indices::Vector{Int}
         if(config.color==Color.RAINBOW)
-            remaining_indices = filter_points_threshold(q, r, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
+            remaining_indices, count = filter_points_threshold(q, r, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
         else
-            remaining_indices = filter_points_threshold(q, r, fixed_indices)
+            remaining_indices, count = filter_points_threshold(q, r, fixed_indices)
         end
         # log_info(point_filter, "Remaining points: $(length(remaining_indices))/$(size(spline_points, 2))\n Filtered: $(size(spline_points, 2)-length(remaining_indices)) ($(length(fixed_indices)) fixed)")
         # spline_points = spline_points[:, remaining_indices]
@@ -381,19 +381,13 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
     elseif(config.color==Color.RESIDUE)
         color_dict = get_amino_acid_color_mapping()
     end
-
-
     log_info(types, "Type of spline points: ", typeof(spline_points))
 
-    circles::Vector{PlainNonStdMesh{T}} = []
 
-    # framesA::Vector{ColoredMesh} = []
-    # framesB::Vector{ColoredMesh} = []
-    # push!(framesB, local_frame_mesh(spline_points[:, 1], q[:, 1], r[:, 1], s[:, 1]))
-
+    circles = Vector{PlainNonStdMesh{T}}(undef, count)
     # iterate and create vertices
     for current_index=axes(spline_points, 2)
-        if(config.filter!=Filter.NONE && current_index ∉ remaining_indices)
+        if(config.filter!=Filter.NONE && remaining_indices[current_index]==-1)
             continue
         end
         # sanity check: frame should be orthogonal
@@ -412,7 +406,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             fixed_color = (0, 0, 255)
         end
 
-        circle = @views generate_geometry_at_point(
+        circles[remaining_indices[current_index]] = @views generate_geometry_at_point(
             spline_points[:, current_index], 
             r[:, current_index], 
             s[:, current_index], 
@@ -423,8 +417,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             fixed_color, 
             color_dict,
             config)
-
-        push!(circles, circle)
     end
 
     spline_mesh = connect_circles_to_tube(circles, @views (spline_points[:, 1], spline_points[:, end]))

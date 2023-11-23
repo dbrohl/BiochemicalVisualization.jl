@@ -85,8 +85,8 @@ function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool)
         C = cross(A, B)
         D = cross(C, A)
 
-        C = C/norm(C)
-        D = D/norm(D)
+        C ./= norm(C)
+        D ./= norm(D)
 
         flip = prev_D!==nothing && abs(acos(dot(prev_D, D)))>0.5*π
         if(flip)

@@ -4,27 +4,28 @@ mutable struct CubicB{T <: Real}
     minorControlPoints::Union{Matrix{T}, Nothing}
 
     point_to_residue_indices::Vector{Int}
+    residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}
 
     num_points_per_resolution::Dict{Int, Vector}
     sample_mapping_per_resolution::Dict{Int, Vector}
 
     function CubicB(chain::Chain{T}, control_point_strategy) where T #TODO correct first and last points?
         if(control_point_strategy==ControlPoints.C_ALPHA)
-            points, point_to_residue_indices = c_alphas_to_points(chain)
+            points, point_to_residue_indices, residue_info_dict = get_c_alpha_positions(chain)
             if(length(points)<2)
                 throw(ErrorException("too few ($(length(points))) c_alpha atoms to compute spline"))
             end
 
-            first_point = points[1] - (points[2]-points[1])
-            last_point = points[end] + (points[end]-points[end-1])
-            points = hcat(first_point, points..., last_point)
+            first_point = points[:, 1] - (points[:, 2]-points[:, 1])
+            last_point = points[:, end] + (points[:, end]-points[:, end-1])
+            points = hcat(first_point, points, last_point)
 
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
 
-            new{T}(control_point_strategy, points, nothing, point_to_residue_indices, Dict(), Dict())
+            new{T}(control_point_strategy, points, nothing, point_to_residue_indices, residue_info_dict, Dict(), Dict())
         elseif(control_point_strategy==ControlPoints.MID_POINTS)
-            major_points, minor_points, point_to_residue_indices = generate_points_carson_bugg(chain, true)
+            major_points, minor_points, point_to_residue_indices, residue_info_dict = generate_points_carson_bugg(chain, true)
 
             major_points = [major_points[:, 1] major_points major_points[:, end]] #alloc
             minor_points = [minor_points[:, 1] minor_points minor_points[:, end]]
@@ -32,7 +33,7 @@ mutable struct CubicB{T <: Real}
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
             
-            new{T}(control_point_strategy, major_points, minor_points, point_to_residue_indices, Dict(), Dict())
+            new{T}(control_point_strategy, major_points, minor_points, point_to_residue_indices, residue_info_dict, Dict(), Dict())
         else
             throw(ArgumentError("$control_point_strategy not implemented for CubicBSpline"))
         end

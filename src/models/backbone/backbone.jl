@@ -56,29 +56,26 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
     log_info(misc, "n_to_c: $n_to_c")
     
     # for each sheet: find the end and save the index
-    fragment_indices = collect(1:length(fragment_list))
-    if(!n_to_c)
-        reverse!(fragment_indices)
-    end
-    prev_i = nothing
+    prev_idx = nothing
     prev_ss = nothing
     arrow_fragment_indices = []
-    for i in fragment_indices
-        current_ss = fragment_list[i].properties[:SS]
+
+    for current_fragment in (n_to_c ? fragment_list : reverse(fragment_list))
+        current_ss = current_fragment.properties[:SS]
         if(prev_ss!==nothing)
             if(n_to_c 
                 && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET 
                 && current_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                push!(arrow_fragment_indices, prev_i)
+                push!(arrow_fragment_indices, prev_idx)
             end
 
             if(!n_to_c 
                 && prev_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET 
                 && current_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                push!(arrow_fragment_indices, i)
+                push!(arrow_fragment_indices, current_fragment.idx)
             end
         end
-        prev_i = i
+        prev_idx = current_fragment.idx
         prev_ss = current_ss
     end
 
@@ -127,8 +124,9 @@ function generate_geometry_at_point(
     point::AbstractVector{T}, 
     normal::AbstractVector{T}, 
     binormal::AbstractVector{T}, 
-    linked_residue::Union{Nothing,Fragment{T}}, 
-    frame_config::Union{Nothing,Tuple{Bool, Bool, Fragment{T}, Fragment{T}}}, 
+    residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}},
+    linked_residue_idx::Union{Nothing,Int}, 
+    frame_config::Union{Nothing,Tuple{Bool, Bool, Int, Int}}, 
     rectangle_width::T, 
     fixed_color::Union{NTuple{3, Int}, Nothing}, 
     color_dict::Union{Nothing,  Dict{BiochemicalAlgorithms.SecondaryStructure.T, NTuple{3, Int}}, Dict{String, NTuple{3, Int}}},
@@ -140,19 +138,19 @@ function generate_geometry_at_point(
         circle_points = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
     elseif(config.backbone_type==BackboneType.CARTOON)
         shortcut = false
-        if(linked_residue===nothing)
+        if(linked_residue_idx===nothing)
             if((frame_config[1] == frame_config[2]))
                 circle_points = stack(repeat([point], config.resolution)) # TODO only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
                 shortcut = true
             else
-                residue = frame_config[3]
+                residue_idx = frame_config[3]
             end
         else
-            residue = linked_residue
+            residue_idx = linked_residue_idx
         end
 
         if(!shortcut)
-            structure = residue.properties[:SS]
+            structure = residue_info_dict[residue_idx][2]
             if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
                 circle_points = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
             elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
@@ -169,20 +167,20 @@ function generate_geometry_at_point(
     if(fixed_color!==nothing)
         color!(circle, fixed_color)
     elseif(config.color==Color.SECONDARY_STRUCTURE)
-        if(linked_residue===nothing)
-            residue = frame_config[4]
+        if(linked_residue_idx===nothing)
+            residue_idx = frame_config[4]
         else
-            residue = linked_residue
+            residue_idx = linked_residue_idx
         end
-        structure = residue.properties[:SS] #runtime
+        structure = residue_info_dict[residue_idx][2]
         color!(circle, color_dict[structure])
     elseif(config.color==Color.RESIDUE)
-        if(linked_residue===nothing)
-            residue = frame_config[4]
+        if(linked_residue_idx===nothing)
+            residue_idx = frame_config[4]
         else
-            residue = linked_residue
+            residue_idx = linked_residue_idx
         end
-        color!(circle, color_dict[residue.name])
+        color!(circle, color_dict[residue_info_dict[residue_idx][1]])
     end
     return circle
 end
@@ -255,14 +253,17 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
 
     # add frames when secondary structure changes # TODO what if n_to_c is false?
     if(config.backbone_type==BackboneType.CARTOON)
-        frame_config = Dict()
+        frame_config = Dict{Int, Tuple{Bool, Bool, Int, Int}}()
         prev_res_idx = sample_to_residue_indices[1]
         a = 1
         while(a<=length(sample_to_residue_indices))
             res_idx = sample_to_residue_indices[a]
-            if(res_idx!=prev_res_idx && fragment_list[prev_res_idx].properties[:SS]!=fragment_list[res_idx].properties[:SS])
-                ss_a = fragment_list[prev_res_idx].properties[:SS]
-                ss_b = fragment_list[res_idx].properties[:SS]
+            prev_ss = spline.residue_info_dict[prev_res_idx][2]
+            curr_ss = spline.residue_info_dict[res_idx][2]
+
+            if(res_idx!=prev_res_idx && prev_ss!=curr_ss)
+                ss_a = prev_ss
+                ss_b = curr_ss
                 small_to_large = ss_a==BiochemicalAlgorithms.SecondaryStructure.NONE || ss_a==BiochemicalAlgorithms.SecondaryStructure.SHEET
                 #log_info(extra_frames, "$ss_a -> $ss_b, small_to_large: $small_to_large")
 
@@ -274,8 +275,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
                     sample_to_residue_indices[insertion_idx+1] = nothing
                     sample_to_residue_indices[insertion_idx+2] = nothing
                     
-                    frame_config[insertion_idx+1] = (small_to_large, true, fragment_list[prev_res_idx], fragment_list[res_idx])
-                    frame_config[insertion_idx+2] = (small_to_large, false, fragment_list[res_idx], fragment_list[res_idx])
+                    frame_config[insertion_idx+1] = (small_to_large, true, prev_res_idx, res_idx)
+                    frame_config[insertion_idx+2] = (small_to_large, false, res_idx, res_idx)
 
                     adjust_indices!(fixed_indices, insertion_idx+1)
                     adjust_indices!(fixed_indices, insertion_idx+1)
@@ -292,8 +293,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
                     sample_to_residue_indices[insertion_idx] = nothing
                     sample_to_residue_indices[insertion_idx+1] = nothing
                     
-                    frame_config[insertion_idx] = (small_to_large, true, fragment_list[prev_res_idx], fragment_list[prev_res_idx])
-                    frame_config[insertion_idx+1] = (small_to_large, false, fragment_list[res_idx], fragment_list[prev_res_idx])
+                    frame_config[insertion_idx] = (small_to_large, true, prev_res_idx, prev_res_idx)
+                    frame_config[insertion_idx+1] = (small_to_large, false, res_idx, prev_res_idx)
 
                     adjust_indices!(fixed_indices, insertion_idx)
                     adjust_indices!(fixed_indices, insertion_idx)
@@ -324,19 +325,19 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
 
         if(config.color==Color.SECONDARY_STRUCTURE && config.backbone_type!=BackboneType.CARTOON)
             prev_res_idx = sample_to_residue_indices[1]
-            prev_ss = fragment_list[sample_to_residue_indices[1]].properties[:SS]
+            prev_ss = spline.residue_info_dict[sample_to_residue_indices[1]][2]
             for (i, res_idx) in enumerate(sample_to_residue_indices)
 
-                if(res_idx!=prev_res_idx && fragment_list[res_idx].properties[:SS]!=prev_ss)
+                if(res_idx!=prev_res_idx && spline.residue_info_dict[res_idx][2]!=prev_ss)
                     push!(fixed_indices, i-1, i) # Color changes at secondary structure changes. 
-                    prev_ss = fragment_list[res_idx].properties[:SS]
+                    prev_ss = spline.residue_info_dict[res_idx][2]
                     prev_res_idx = res_idx
                 end
             end
         end
         if(config.color==Color.RESIDUE)
             prev_res_idx = sample_to_residue_indices[1]
-            prev_ss = fragment_list[sample_to_residue_indices[1]].properties[:SS]
+            prev_ss = spline.residue_info_dict[sample_to_residue_indices[1]][2]
 
             prev_was_nothing = false
             for (i, resIdx) in enumerate(sample_to_residue_indices)
@@ -415,7 +416,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             spline_points[:, current_index], 
             r[:, current_index], 
             s[:, current_index], 
-            sample_to_residue_indices[current_index]===nothing ? nothing : fragment_list[sample_to_residue_indices[current_index]],
+            spline.residue_info_dict,
+            sample_to_residue_indices[current_index],
             (config.backbone_type==BackboneType.CARTOON && current_index ∈ keys(frame_config)) ? frame_config[current_index] : nothing,
             config.backbone_type==BackboneType.CARTOON ? rectangle_widths[current_index] : T(1.0),
             fixed_color, 

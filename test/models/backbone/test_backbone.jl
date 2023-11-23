@@ -33,7 +33,8 @@
             BackboneConfig(Float32(0.2), 12, BackboneType.BACKBONE, Color.UNIFORM, Spline.CUBIC_B, ControlPoints.MID_POINTS, Frame.SECOND_SPLINE, Filter.ANGLE)
     ]
     prepare_backbone_model(pdb, configs[1])
-    for config in configs
+    for (i, config) in enumerate(configs)
+        println("Config $i: $config")
         stats = @timed prepare_backbone_model(pdb, config)
         println("$(stats.time)")
         @test stats.time<2

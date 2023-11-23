@@ -4,29 +4,30 @@ mutable struct CatmullRom{T<:Real}
     minorControlPoints::Union{Matrix{T}, Nothing}
 
     point_to_residue_indices::Vector{Int}
+    residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}
 
     num_points_per_resolution::Dict{Int, Vector}
     sample_mapping_per_resolution::Dict{Int, Vector}
 
     function CatmullRom(chain::Chain{T}, control_point_strategy) where T
         if(control_point_strategy==ControlPoints.C_ALPHA)
-            points, point_to_residue_indices = c_alphas_to_points(chain)
+            points, point_to_residue_indices, residue_info_dict = get_c_alpha_positions(chain)
             if(length(points)<2)
                 throw(ErrorException("too few ($(length(points))) c_alpha atoms to compute spline"))
             end
 
             # add first and last dummy point
             # control points cannot be the same (otherwise the sampling produces NaN values)
-            first_point = points[1] - (points[2]-points[1])
-            last_point = points[end] + (points[end]-points[end-1])
-            points = hcat(first_point, points..., last_point)
+            first_point = points[:, 1] - (points[:, 2]-points[:, 1])
+            last_point = points[:, end] + (points[:, end]-points[:, end-1])
+            points = hcat(first_point, points, last_point)
 
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
 
-            new{T}(control_point_strategy, points, nothing, point_to_residue_indices, Dict(), Dict())
+            new{T}(control_point_strategy, points, nothing, point_to_residue_indices, residue_info_dict, Dict(), Dict())
         elseif(control_point_strategy==ControlPoints.MID_POINTS)
-            major_points, minor_points, point_to_residue_indices = generate_points_carson_bugg(chain, false)
+            major_points, minor_points, point_to_residue_indices, residue_info_dict = generate_points_carson_bugg(chain, false)
 
             # add first and last dummy point
             # control points cannot be the same (otherwise the sampling produces NaN values)
@@ -35,8 +36,8 @@ mutable struct CatmullRom{T<:Real}
 
             prepend!(point_to_residue_indices, point_to_residue_indices[1])
             push!(point_to_residue_indices, point_to_residue_indices[end])
-            
-            new{T}(control_point_strategy, major_points, minor_points, point_to_residue_indices, Dict(), Dict())
+
+            new{T}(control_point_strategy, major_points, minor_points, point_to_residue_indices, residue_info_dict, Dict(), Dict())
         else
             throw(ArgumentError("$control_point_strategy not implemented for CatmullRomSpline"))
         end
@@ -44,7 +45,6 @@ mutable struct CatmullRom{T<:Real}
 end
 
 function calculate_points(spline::CatmullRom, resolution)
-    dict_key = Int(round(resolution*1000))
     return evaluate_generic_quadruple_spline(spline.controlPoints, num_points(spline, resolution), compute_catmull_rom_quadruple), sample_to_fragment_index_mapping(spline, resolution)
 end
 

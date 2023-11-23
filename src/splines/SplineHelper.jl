@@ -1,53 +1,69 @@
-function atoms_by_fragments(chain::Chain{T}) where T
 
-end
-
-"""
-Finds c-alpha-atoms in a chain.
-Returns a list of position vectors and a list of indices (which can be used later to reference the fragments). 
-"""
-function c_alphas_to_points(chain::Chain{T}) where T
-    c_alphas = []
-    point_to_residue_indices = []
-    for (i, fragment) in enumerate(fragments(chain))
-        if(is_amino_acid(fragment.name))
-            ca = filter(x -> x.element==Elements.C && x.name=="CA", atoms(fragment))
-            @assert length(ca)==1
-            push!(c_alphas, ca[1].r)
-            push!(point_to_residue_indices, i)
+function get_c_alpha_positions(chain::Chain{T}, with_oxygens=false) where T
+    cas = []
+    os = []
+    for x in eachatom(chain)
+        if x.element==Elements.C && x.name=="CA"
+            push!(cas, x)
+        end
+    
+        if with_oxygens && x.element==Elements.O && x.name=="O"
+            push!(os, x)
         end
     end
-    # sphere_radius = 0.05
-    # sphere_mesh = simplexify(Sphere{3, Float32}((0,0,0), sphere_radius))
-    # spheres = map(a -> Translate(Float32.(a)...)((sphere_mesh)), c_alphas)
-    # spheres = map(s -> ColoredMesh(s, (0, 0, 0)), spheres)
-    # m1 = reduce(merge, spheres)
-    # export_mesh_to_ply("c-alpha.ply", m1)
 
-    return c_alphas, point_to_residue_indices
+    if(with_oxygens && length(cas)!=length(os))
+        log_warning("different number of c-alpha ($(length(cas))) and oxygen ($(length(os))) atoms")
+        if(length(cas)<length(os))
+            os = os[1:length(cas)]
+        else
+            cas = cas[1:length(os)]
+        end
+    end
+
+    positions = Matrix{T}(undef, 3, length(cas))
+    indices = Vector{Int}(undef, length(cas))
+    residue_info_dict = Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}()
+
+    for (i, ca) in enumerate(cas)
+        positions[:, i] = ca.r
+        fragment = parent_fragment(ca)
+        indices[i] = fragment._row.idx
+        residue_info_dict[fragment._row.idx] = (fragment.name, fragment.properties[:SS])
+    end
+    if(with_oxygens)
+        oxygen_positions = Matrix{T}(undef, 3, length(os))
+        for (i, o) in enumerate(os)
+            oxygen_positions[:, i] = o.r
+        end
+    end
+
+    if(!issorted(indices))
+        order = sortperm(indices)
+        indices = indices[order]
+        positions = positions[:, order]
+        if(with_oxygens)
+            oxygen_positions = oxygen_positions[:, order]
+        end
+    end
+
+    if(with_oxygens)
+        return positions, indices, residue_info_dict, oxygen_positions
+    else 
+        return positions, indices, residue_info_dict
+    end
 end
 
 function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool) where T
     # find relevant atom positions
-    c_alphas = []
-    oxygens = []
-    structures = []
-    point_to_residue_indices = []
-    for (i, fragment) in enumerate(fragments(chain)) # TODO no grouping in the loop!
-        if(is_amino_acid(fragment.name))
-            atom_list = atoms(fragment)
-            ca = filter(x -> x.element==Elements.C && x.name=="CA", atom_list)
-            ox = filter(x -> x.element==Elements.O && x.name=="O", atom_list)
-            @assert length(ca)==1 && length(ox)==1
-
-            push!(c_alphas, ca[1])
-            push!(oxygens, ox[1])
-            push!(structures, fragment.properties[:SS])
-            push!(point_to_residue_indices, i)
-        end
+    c_positions, point_to_residue_indices, residue_info_dict, o_positions = get_c_alpha_positions(chain, true)
+    
+    structures = Vector{BiochemicalAlgorithms.SecondaryStructure.T}(undef, length(point_to_residue_indices))
+    for (i, res_idx) in enumerate(point_to_residue_indices)
+        structures[i] = residue_info_dict[res_idx][2]
     end
-    if(length(c_alphas)<3)
-        throw(ErrorException("too few ($(length(c_alphas))) c_alpha atoms to compute spline with Carson&Bugg method"))
+    if(size(c_positions, 2)<3)
+        throw(ErrorException("too few ($(size(c_positions, 2))) c_alpha atoms to compute spline with Carson&Bugg method"))
     end
 
     # sphere_radius = 0.05
@@ -57,15 +73,15 @@ function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool)
     # m1 = reduce(merge, spheres)
     # export_mesh_to_ply("c-alpha.ply", m1)
 
-    main_points = Matrix{T}(undef, 3, length(c_alphas)-1)
-    minor_points = Matrix{T}(undef, 3, length(c_alphas)-1)
+    main_points = Matrix{T}(undef, 3, size(c_positions, 2)-1)
+    minor_points = Matrix{T}(undef, 3, size(c_positions, 2)-1)
 
     # construct planes to obtain spline control points
     current_flip = false
     prev_D::Union{Vector{T}, Nothing} = nothing
-    for i=1:length(c_alphas)-1
-        A = c_alphas[i+1].r - c_alphas[i].r
-        B = oxygens[i].r - c_alphas[i].r
+    for i=1:size(c_positions, 2)-1
+        A = c_positions[:, i+1] .- c_positions[:, i]
+        B = o_positions[:, i] .- c_positions[:, i]
         C = cross(A, B)
         D = cross(C, A)
 
@@ -78,7 +94,7 @@ function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool)
         end
         prev_D = D
         
-        P = c_alphas[i].r + T(0.5) * A
+        P = c_positions[:,i] + T(0.5) * A
         if(offset_helix_points && (structures[i]==BiochemicalAlgorithms.SecondaryStructure.HELIX || structures[i+1]==BiochemicalAlgorithms.SecondaryStructure.HELIX))
             P += T(1.5) * C
         end
@@ -96,7 +112,7 @@ function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool)
     # spheres = map(s -> ColoredMesh(s, (0, 0, 255)), spheres)
     # m1 = reduce(merge, spheres)
     # export_mesh_to_ply("main_points.ply", m1)
-    return main_points, minor_points, point_to_residue_indices
+    return main_points, minor_points, point_to_residue_indices, residue_info_dict
 end
 
 function calculate_resolution_dependent_data(spline, resolution)

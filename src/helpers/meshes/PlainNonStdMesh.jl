@@ -1,5 +1,5 @@
 """
-PlainMesh represents a 3D mesh that is described by its vertices, the connections between them and the vertexcolors. 
+PlainNonStdMesh represents a 3D mesh that is described by its vertices, the connections between them and the vertexcolors. 
 The faces are not necessarily triangles, but can include an arbitrary number of vertices. 
 """
 mutable struct PlainNonStdMesh{T}

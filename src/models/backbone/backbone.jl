@@ -129,7 +129,6 @@ function generate_geometry_at_point(
     frame_config::Union{Nothing,Tuple{Bool, Bool, Int, Int}}, 
     rectangle_width::T, 
     fixed_color::Union{NTuple{3, Int}, Nothing}, 
-    color_dict::Union{Nothing,  Dict{BiochemicalAlgorithms.SecondaryStructure.T, NTuple{3, Int}}, Dict{String, NTuple{3, Int}}},
     config::BackboneConfig) where T
     # generate cross-section vertices
     if(config.backbone_type==BackboneType.BACKBONE)
@@ -173,14 +172,14 @@ function generate_geometry_at_point(
             residue_idx = linked_residue_idx
         end
         structure = residue_info_dict[residue_idx][2]
-        color!(circle, color_dict[structure])
+        color!(circle, SS_COLORS[structure])
     elseif(config.color==Color.RESIDUE)
         if(linked_residue_idx===nothing)
             residue_idx = frame_config[4]
         else
             residue_idx = linked_residue_idx
         end
-        color!(circle, color_dict[residue_info_dict[residue_idx][1]])
+        color!(circle, AA_COLORS[residue_info_dict[residue_idx][1]])
     end
     return circle
 end
@@ -213,13 +212,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
         q, r, s = frames_from_two_splines(spline_points, velocities, second_spline_points)
 
 
-        # sphere_radius = 0.2
-        # sphere_mesh = discretize(Sphere{3, Float64}((0,0,0), sphere_radius), RegularDiscretization(6))
-        # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 200, 200)), eachcol(spline_points)))
-        # export_mesh_to_ply("main_points_new.ply", debug_mesh)
-
-        # debug_mesh = reduce(BiochemicalVisualization.merge, map(a -> ColoredMesh(Translate(Float64.(a)...)((sphere_mesh)), (200, 0, 0)), eachcol(second_spline_points)))
-        # export_mesh_to_ply("outer_points_new.ply", debug_mesh)
     end
     if(config.color==Color.RAINBOW)
         color_range = range(HSV(0,1,1), stop=HSV(360,1,1), length=size(spline_points, 2))
@@ -375,12 +367,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
         # end
     end
 
-    color_dict = nothing
-    if(config.color==Color.SECONDARY_STRUCTURE)
-        color_dict = get_structure_color_mapping()
-    elseif(config.color==Color.RESIDUE)
-        color_dict = get_amino_acid_color_mapping()
-    end
     log_info(types, "Type of spline points: ", typeof(spline_points))
 
 
@@ -414,8 +400,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             sample_to_residue_indices[current_index],
             (config.backbone_type==BackboneType.CARTOON && current_index ∈ keys(frame_config)) ? frame_config[current_index] : nothing,
             config.backbone_type==BackboneType.CARTOON ? rectangle_widths[current_index] : T(1.0),
-            fixed_color, 
-            color_dict,
+            fixed_color,
             config)
     end
 
@@ -460,19 +445,20 @@ function prepare_backbone_model(
         chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end]) #alloc
     end
 
-    chain_meshes::Vector{PlainMesh{T}} = []
-    for (chain_num, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
+    empty_mesh = PlainMesh(zeros(T, (3, 0)), zeros(Int, (3, 0)), Vector{NTuple{3, Int}}())
+    chain_meshes = fill(empty_mesh, (nchains(ac)))
+    for (chain_idx, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
         try
             color = nothing
             if(config.color==Color.UNIFORM)
                 color = uniform_color
             elseif(config.color==Color.CHAIN)
-                color = chain_colors[chain_num]
+                color = chain_colors[chain_idx]
             end
 
             chain_mesh = prepare_backbone_model(chain, config, color)
 
-            push!(chain_meshes, chain_mesh)
+            chain_meshes[chain_idx] = chain_mesh
         catch e
             if e isa ErrorException
                 log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")

@@ -1,5 +1,5 @@
 """
-Returns the indices of points that should not be removed. 
+Returns the indices and the number of points that should not be removed. 
 Whenever the angle between the last selected and the current tangent is too large, the current index is added. 
 
 * When colors!=nothing, too large hue distances are prevented as well.
@@ -25,7 +25,7 @@ function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::Abst
     last_remaining_index = 1
     a = 1
     for i=axes(q, 2)
-        if(i!=1 || insorted(i, fixed_indices))
+        if(i==1 || insorted(i, fixed_indices))
             last_remaining_index = i
             target_indices[i] = a
             a += 1

@@ -1,14 +1,19 @@
-
 function get_c_alpha_positions(chain::Chain{T}, with_oxygens=false) where T
-    cas = []
-    os = []
+    cas::Vector{Tuple{Atom{T}, Fragment{T}}} = []
+    os ::Vector{Tuple{Atom{T}, Fragment{T}}}= []
     for x in eachatom(chain)
         if x.element==Elements.C && x.name=="CA"
-            push!(cas, x)
+            parent = parent_fragment(x)
+            if is_amino_acid(parent)
+                push!(cas, (x, parent))
+            end
         end
     
         if with_oxygens && x.element==Elements.O && x.name=="O"
-            push!(os, x)
+            parent = parent_fragment(x)
+            if is_amino_acid(parent)
+                push!(os, (x, parent))
+            end
         end
     end
 
@@ -25,15 +30,14 @@ function get_c_alpha_positions(chain::Chain{T}, with_oxygens=false) where T
     indices = Vector{Int}(undef, length(cas))
     residue_info_dict = Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}()
 
-    for (i, ca) in enumerate(cas)
+    for (i, (ca, fragment)) in enumerate(cas)
         positions[:, i] = ca.r
-        fragment = parent_fragment(ca)
-        indices[i] = fragment._row.idx
-        residue_info_dict[fragment._row.idx] = (fragment.name, fragment.properties[:SS])
+        indices[i] = fragment.idx
+        residue_info_dict[fragment.idx] = (fragment.name, fragment.properties[:SS])
     end
     if(with_oxygens)
         oxygen_positions = Matrix{T}(undef, 3, length(os))
-        for (i, o) in enumerate(os)
+        for (i, (o, fragment)) in enumerate(os)
             oxygen_positions[:, i] = o.r
         end
     end
@@ -116,8 +120,8 @@ function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool)
 end
 
 function calculate_resolution_dependent_data(spline, resolution)
-    num_points = []
-    sample_mapping = []
+    num_points::Vector{Int} = []
+    sample_mapping::Vector{Int} = []
     i = 1
     while i+3 <= size(spline.controlPoints, 2)
         distance = @views norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])

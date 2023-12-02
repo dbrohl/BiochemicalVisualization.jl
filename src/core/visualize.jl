@@ -135,6 +135,42 @@ const ELEMENT_COLORS = [
 	(255, 255, 255)    # UNKNOWN
 ]
 
+const AA_COLORS = Dict{String, NTuple{3, Int}}(
+"ALA" => (199, 33, 221), 
+"ARG" => (209, 74, 0), 
+"ASN" => (0, 140, 0), 
+"ASP" => (0, 127, 177), 
+"CYS" => (209, 172, 0), 
+"GLN" => (135, 0, 54), 
+"GLU" => (255, 143, 161), 
+"GLY" => (0, 0, 139), 
+"HIS" => (46, 255, 113), 
+"ILE" => (103, 82, 0), 
+"LEU" => (0, 208, 217), 
+"LYS" => (0, 80, 67), 
+"MET" => (126, 116, 126), 
+"PHE" => (163, 189, 255), 
+"PRO" => (149, 160, 135), 
+"SER" => (255, 172, 121), 
+"THR" => (94, 35, 0), 
+"TRP" => (255, 255, 160), 
+"TYR" => (73, 62, 94), 
+"VAL" => (255, 136, 255), 
+"PYL" => (241, 0, 79), 
+"SEC" => (0, 139, 118), 
+"ASX" => (0, 78, 193), 
+"XLE" => (42, 0, 23), 
+"GLX" => (255, 217, 255), 
+"XAA" => (189, 171, 168), 
+"TER" => (38, 42, 0), 
+"GAP" => (182, 249, 217)
+)
+
+const SS_COLORS = Dict(
+	SecondaryStructure.NONE => (255, 255, 255), 
+	SecondaryStructure.HELIX => (255, 75, 120), 
+	SecondaryStructure.SHEET => (255, 150, 0))
+
 hex_colors = [hex(RGB((e ./ 255)...)) for e in ELEMENT_COLORS]
 
 element_color_web(e) = "#"*lowercase(get(hex_colors, Int(e), hex_colors[end]))

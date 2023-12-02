@@ -19,6 +19,7 @@ using KernelAbstractions
 
 using BenchmarkTools # TODO not necessary for package
 using Infiltrator
+using Cthulhu
 
 
 asset_path(parts...) = normpath(joinpath(@__DIR__, "..", "assets", parts...))
@@ -51,7 +52,6 @@ include("helpers/meshes/MeshHelpers.jl")
 include("helpers/gpu_rotation_test.jl")
 include("helpers/utils.jl")
 include("helpers/point_filter.jl")
-include("helpers/color_maps.jl")
 
 include("core/representation.jl")
 

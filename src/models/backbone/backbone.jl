@@ -37,13 +37,13 @@ function adjust_indices!(index_array, threshold)
     end
 end
 
-function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_residue_indices) where T
+function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_residue_indices, residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}) where T
     rectangle_widths::Vector{T} = []
     arrow_starts::Vector{Int} = []
     arrow_frame_indices::Vector{Int} = []
 
     filtered_fragment_list = filter(f -> is_amino_acid(f), fragment_list)
-    # determine orientation of looping (arrows point towards carboxyl-end) # TODO test if this works
+    # determine orientation of looping (arrows point towards carboxyl-end)
     if((Symbol(:N_TERMINAL) ∈ filtered_fragment_list[1].flags) 
         && (Symbol(:C_TERMINAL) ∈ filtered_fragment_list[end].flags))
         n_to_c = true
@@ -60,23 +60,29 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
     prev_ss = nothing
     arrow_fragment_indices = []
 
-    for current_fragment in (n_to_c ? fragment_list : reverse(fragment_list))
-        current_ss = current_fragment.properties[:SS]
-        if(prev_ss!==nothing)
-            if(n_to_c 
-                && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET 
-                && current_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                push!(arrow_fragment_indices, prev_idx)
-            end
 
-            if(!n_to_c 
-                && prev_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET 
-                && current_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                push!(arrow_fragment_indices, current_fragment.idx)
-            end
+    fragment_idx_list_from_frames = unique(sample_to_residue_indices) # TODO wo noch? laufzeit?
+    for current_fragment_idx in fragment_idx_list_from_frames
+        current_ss = residue_info_dict[current_fragment_idx][2]
+
+        if(n_to_c && prev_ss!==nothing
+            && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET 
+            && current_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET)
+            push!(arrow_fragment_indices, prev_idx)
         end
-        prev_idx = current_fragment.idx
+
+        if(!n_to_c 
+            && prev_ss!=BiochemicalAlgorithms.SecondaryStructure.SHEET 
+            && current_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)
+            push!(arrow_fragment_indices, current_fragment_idx)
+        end
+        prev_idx = current_fragment_idx
         prev_ss = current_ss
+    end
+
+
+    if(n_to_c && prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET) # end last sheet
+        push!(arrow_fragment_indices, prev_idx)
     end
 
     # find corresponding frames and store the resulting width of the rectangle at that frame
@@ -85,26 +91,27 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
 
     a = 1
     while(a<=length(sample_to_residue_indices))
+        
         res_idx = sample_to_residue_indices[a]
-        if(res_idx!=prev_res_idx || a==length(sample_to_residue_indices)) # end of the previous residue
-            if(a==length(sample_to_residue_indices))
+        is_last_frame = a==length(sample_to_residue_indices)
+        if(res_idx!=prev_res_idx || is_last_frame) # end of the previous residue
+            if(is_last_frame)
                 frames_in_residue_count += 1
             end
-            if(prev_res_idx ∈ arrow_fragment_indices)
+            if(prev_res_idx ∈ arrow_fragment_indices || (is_last_frame && res_idx ∈ arrow_fragment_indices))
                 num_uniform = Int(round(frames_in_residue_count/3))
                 num_arrow = frames_in_residue_count - num_uniform
                 uniforms = repeat([1], num_uniform)
                 arrow = collect(range(1.5, 0, num_arrow))
                 if(n_to_c)
                     append!(arrow_frame_indices, length(rectangle_widths)+num_uniform+1:length(rectangle_widths)+num_uniform+num_arrow)
+                    push!(arrow_starts, length(rectangle_widths)+num_uniform+1)
                     append!(rectangle_widths, uniforms, arrow)
                 else
                     append!(arrow_frame_indices, length(rectangle_widths)+1:length(rectangle_widths)+num_arrow)
+                    push!(arrow_starts, length(rectangle_widths)+num_arrow)
                     append!(rectangle_widths, reverse!(arrow), uniforms)
                 end
-                
-                # add geometry between uniform and arrow part
-                push!(arrow_starts, length(rectangle_widths)-num_arrow+1)
             else
                 append!(rectangle_widths, repeat([1], frames_in_residue_count))
             end
@@ -117,7 +124,7 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
         a += 1
     end
 
-    return rectangle_widths, arrow_starts, arrow_frame_indices
+    return rectangle_widths, arrow_starts, arrow_frame_indices, n_to_c
 end
 
 function generate_geometry_at_point(
@@ -223,14 +230,14 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
 
     # preparation for arrows
     if(config.backbone_type==BackboneType.CARTOON)
-        rectangle_widths, arrow_starts, arrow_frame_indices = compute_frame_widths(fragment_list, sample_to_residue_indices)
-        append!(fixed_indices, arrow_frame_indices)
+        rectangle_widths, arrow_starts, arrow_frame_indices, n_to_c = compute_frame_widths(fragment_list, sample_to_residue_indices, spline.residue_info_dict)
+        append!(fixed_indices, arrow_frame_indices) # the arrow part with changing frame widths should not be discarded by filter methods
         sort!(fixed_indices)
 
-        for i=eachindex(arrow_starts)
+        for i=eachindex(arrow_starts) # add frame at the begin of the arrow head
             insertion_idx = arrow_starts[i]
             spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
-            rectangle_widths[arrow_starts[i]] = T(1.0)
+            rectangle_widths[arrow_starts[i]+(n_to_c ? 0 : 1)] = T(1.0)
 
             # adjust indices after the insertion site
             adjust_indices!(fixed_indices, arrow_starts[i])
@@ -253,10 +260,9 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             prev_ss = spline.residue_info_dict[prev_res_idx][2]
             curr_ss = spline.residue_info_dict[res_idx][2]
 
-            if(res_idx!=prev_res_idx && prev_ss!=curr_ss)
-                ss_a = prev_ss
-                ss_b = curr_ss
-                small_to_large = ss_a==BiochemicalAlgorithms.SecondaryStructure.NONE || ss_a==BiochemicalAlgorithms.SecondaryStructure.SHEET
+            if(res_idx!=prev_res_idx && prev_ss!=curr_ss) # ss change
+                small_to_large = (n_to_c && (prev_ss==BiochemicalAlgorithms.SecondaryStructure.NONE || prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET) 
+                                || (!n_to_c && curr_ss==BiochemicalAlgorithms.SecondaryStructure.HELIX))
                 #log_info(extra_frames, "$ss_a -> $ss_b, small_to_large: $small_to_large")
 
                 if(small_to_large)

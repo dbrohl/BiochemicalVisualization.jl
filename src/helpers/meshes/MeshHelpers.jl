@@ -16,11 +16,14 @@ See also [`create_ellipse_in_local_frame`](@ref), [`create_rectangle_in_local_fr
 """
 function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T
     points = Matrix{T}(undef, 3, resolution)
+    normals = Matrix{T}(undef, 3, resolution)
 
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
+        @. normals[:, i] = radius*cos(α)*local_y + radius*sin(α)*local_z
+        normals[:, i] ./= norm(@view normals[:, i])
     end
-    return points
+    return points, normals
 end
 
 """
@@ -33,11 +36,14 @@ See also [`create_circle_in_local_frame`](@ref), [`create_rectangle_in_local_fra
 """
 function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     points = Matrix{T}(undef, 3, resolution)
+    normals = Matrix{T}(undef, 3, resolution)
 
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
+        @. normals[:, i] = half_width*cos(α)*local_y + half_height*sin(α)*local_z
+        normals[:, i] ./= norm(@view normals[:, i])
     end
-    return points
+    return points, normals
 end
 
 """
@@ -53,6 +59,7 @@ function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::Abst
     end
 
     points = Matrix{T}(undef, 3, resolution)
+    normals = Matrix{T}(undef, 3, resolution)
 
     # each corner has a point
     # the remaining points are split into sections A to E
@@ -68,38 +75,51 @@ function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::Abst
     A = Int(floor(AE/2))
     E = AE-A
     
-    half_width = half_width*local_y
-    half_height = half_height*local_z
+    half_width_vector = half_width*local_y
+    half_height_vector = half_height*local_z
     a = 1
     for y in range(0, 1, A+2)[2:end-1]
-        @. points[:, a] = center + half_width + y*half_height
+        @. points[:, a] = center + half_width_vector + y*half_height_vector
+        normals[:, a] .= local_y
         a+=1
     end
-    @. points[:, a] = center + half_width + half_height
+    @. points[:, a] = center + half_width_vector + half_height_vector
+    normals[:, a] .= local_y .+ local_z
+    normals[:, a] ./= norm(@view normals[:, a])
     a+=1
     for x in range(1, -1, B+2)[2:end-1]
-        @. points[:, a] = center + x*half_width + half_height
+        @. points[:, a] = center + x*half_width_vector + half_height_vector
+        normals[:, a] .= local_z
         a+=1
     end
-    @. points[:, a] = center - half_width + half_height
+    @. points[:, a] = center - half_width_vector + half_height_vector
+    normals[:, a] .= -local_y .+ local_z
+    normals[:, a] ./= norm(@view normals[:, a])
     a+=1
     for y in range(1, -1, C+2)[2:end-1]
-        @. points[:, a] = center - half_width + y*half_height
+        @. points[:, a] = center - half_width_vector + y*half_height_vector
+        normals[:, a] .= -local_y
         a+=1
     end
-    @. points[:, a] = center - half_width - half_height
+    @. points[:, a] = center - half_width_vector - half_height_vector
+    normals[:, a] .= -local_y .- local_z
+    normals[:, a] ./= norm(@view normals[:, a])
     a+=1
     for x in range(-1, 1, D+2)[2:end-1]
-        @. points[:, a] = center + x*half_width - half_height
+        @. points[:, a] = center + x*half_width_vector - half_height_vector
+        normals[:, a] .= -local_z
         a+=1
     end
-    @. points[:, a] = center + half_width - half_height
+    @. points[:, a] = center + half_width_vector - half_height_vector
+    normals[:, a] .= local_y .- local_z
+    normals[:, a] ./= norm(@view normals[:, a])
     a+=1
     for y in range(-1, 0, E+2)[2:end-1]
-        @. points[:, a] = center + half_width + y*half_height
+        @. points[:, a] = center + half_width_vector + y*half_height_vector
+        normals[:, a] .= local_y
         a+=1
     end
-    return points
+    return points, normals
 end
 
 "Creates a ColoredMesh representing a red, green and blue coordinate system. "
@@ -123,9 +143,11 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
     num_connects = sum(map(m -> size(m.connections, 2), meshes))
 
     points = Matrix{T}(undef, 3, num_points)
+    normals = Matrix{T}(undef, 3, num_points)
     a = 1
     for m in meshes
         points[:, a:a+size(m.vertices, 2)-1] .= m.vertices
+        normals[:, a:a+size(m.normals, 2)-1] .= m.normals
         a += size(m.vertices, 2)
     end
 
@@ -148,17 +170,17 @@ function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
         connect_offset += connect_len
     end
 
-    return PlainMesh{T}(points, connects, colors)
+    return PlainMesh{T}(points, normals, connects, colors)
 end
 
 """
 Adds faces between circles to create the surface of a tube. 
 When endpoints is passed to the function, the tube will be closed (by a flat plane) at the start and the end. 
 """
-function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints::Union{Nothing, NTuple{2, AbstractVector{T}}} = nothing) where {T}
+function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints::Union{Nothing, NTuple{2, NTuple{2, AbstractVector{T}}}} = nothing) where {T}
 
     if(length(circles)==0)
-        return PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
+        return PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
     end
 
     resolution = size(circles[1].vertices, 2)
@@ -166,16 +188,21 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, en
     # collect all points
     matrix_length = (length(circles) * resolution) + (endpoints===nothing ? 0 : 2)
     points = Matrix{T}(undef, 3, matrix_length)
+    normals = Matrix{T}(undef, 3, matrix_length)
     colors = Vector{NTuple{3, Int}}(undef, matrix_length)
     for (i, circle) in enumerate(circles)
         points[:, (i-1)*resolution+1:i*resolution] = circle.vertices
+        normals[:, (i-1)*resolution+1:i*resolution] = circle.normals
         colors[(i-1)*resolution+1:i*resolution] = circle.colors
     end
     if(endpoints!==nothing)
-        points[:, end-1] = endpoints[1]
+        points[:, end-1] = endpoints[1][1]
+        normals[:, end-1] = endpoints[1][2]
         colors[end-1] = circles[1].colors[1]
-        points[:, end] = endpoints[2]
+        points[:, end] = endpoints[2][1]
+        normals[:, end] = endpoints[2][2]
         colors[end] = circles[end].colors[1]
+
     end
 
     
@@ -224,5 +251,5 @@ function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, en
     log_info(types, "Type of points in connect_tube: ", typeof(points))
 
     
-    return PlainMesh{T}(points, connections, colors)
+    return PlainMesh{T}(points, normals, connections, colors)
 end

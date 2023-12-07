@@ -129,6 +129,7 @@ end
 
 function generate_geometry_at_point(
     point::AbstractVector{T}, 
+    tangent::AbstractVector{T},
     normal::AbstractVector{T}, 
     binormal::AbstractVector{T}, 
     residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}},
@@ -139,14 +140,15 @@ function generate_geometry_at_point(
     config::BackboneConfig) where T
     # generate cross-section vertices
     if(config.backbone_type==BackboneType.BACKBONE)
-        circle_points = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
+        circle_points, normals = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
     elseif(config.backbone_type==BackboneType.RIBBON)
-        circle_points = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
+        circle_points, normals = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
     elseif(config.backbone_type==BackboneType.CARTOON)
         shortcut = false
         if(linked_residue_idx===nothing)
             if((frame_config[1] == frame_config[2]))
-                circle_points = stack(repeat([point], config.resolution)) # TODO only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
+                circle_points = stack(repeat([point], config.resolution)) # only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
+                normals = stack(repeat([tangent], config.resolution))
                 shortcut = true
             else
                 residue_idx = frame_config[3]
@@ -158,16 +160,16 @@ function generate_geometry_at_point(
         if(!shortcut)
             structure = residue_info_dict[residue_idx][2]
             if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
-                circle_points = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
+                circle_points, normals = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
             elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
-                circle_points = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
+                circle_points, normals = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
             elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                circle_points = create_rectangle_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
+                circle_points, normals = create_rectangle_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
             end
         end
     end 
     # add edges
-    circle = PlainNonStdMesh(circle_points, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}(undef, config.resolution))
+    circle = PlainNonStdMesh(circle_points, normals, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}(undef, config.resolution))
 
     # color
     if(fixed_color!==nothing)
@@ -400,6 +402,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
 
         circles[remaining_indices[current_index]] = @views generate_geometry_at_point(
             spline_points[:, current_index], 
+            q[:, current_index],
             r[:, current_index], 
             s[:, current_index], 
             spline.residue_info_dict,
@@ -410,7 +413,22 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             config)
     end
 
-    spline_mesh = connect_circles_to_tube(circles, @views (spline_points[:, 1], spline_points[:, end]))
+    i_a = -1
+    i_b = -1
+    for i=axes(spline_points, 2)
+        if(config.filter==Filter.NONE || remaining_indices[i]!=-1)
+            i_a = i
+            break
+        end
+    end
+    for i=reverse(axes(spline_points, 2))
+        if(config.filter==Filter.NONE || remaining_indices[i]!=-1)
+            i_b = i
+            break
+        end
+    end
+
+    spline_mesh = connect_circles_to_tube(circles, @views ((spline_points[:, i_a], -q[:, i_a]), (spline_points[:, i_b], q[:, i_b])))
     log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
     # ----- debug export -----
@@ -428,10 +446,9 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
 end
 
 function prepare_backbone_model(
-    ac::System{T}, config::BackboneConfig) where {T<:Real}
+    ac::System{T}, config::BackboneConfig{T}) where {T<:Real}
 
     start_time = now()
-    config.stick_radius = T(config.stick_radius)
 
 
     log_info(types, "Type: ", T)
@@ -451,7 +468,7 @@ function prepare_backbone_model(
         chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end]) #alloc
     end
 
-    empty_mesh = PlainMesh(zeros(T, (3, 0)), zeros(Int, (3, 0)), Vector{NTuple{3, Int}}())
+    empty_mesh = PlainMesh(zeros(T, (3, 0)), zeros(T, (3, 0)), zeros(Int, (3, 0)), Vector{NTuple{3, Int}}())
     chain_meshes = fill(empty_mesh, (nchains(ac)))
     for (chain_idx, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
         try

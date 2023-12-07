@@ -5,27 +5,31 @@ export Representation
 struct Representation{T <: Real}
     primitives::Dict{String, AbstractVector{GeometryBasics.GeometryPrimitive{3,T}}}
     vertices::AbstractVector{T}
+    normals::AbstractVector{T}
     connections::AbstractVector{Int}
     colors::Dict{String, AbstractVector{String}}
 
     function Representation{T}(;
         primitives=Dict{String, Vector{GeometryBasics.GeometryPrimitive{3,T}}}(),
         vertices=Vector{T}(),
+        normals=Vector{T}(),
         connections=Vector{Int}(),
         colors=Dict{String, Vector{String}}()) where {T}
         
-        new{T}(primitives, vertices, connections, colors)
+        new{T}(primitives, vertices, normals, connections, colors)
     end
 end
 
 function Representation(mesh::PlainMesh{T}) where T
     p = vec(mesh.vertices)
+    n = vec(mesh.normals)
     c = vec(mesh.connections) .- 1
 
     colors = ["#"*hex(RGB((c ./ 255)...)) for c in mesh.colors]
 
     return Representation{T}(
         vertices=p, 
+        normals = n,
         connections=c, 
         colors=Dict([("mesh", colors)]))
 
@@ -36,6 +40,7 @@ function ==(a::Representation{T}, b::Representation{U}) where {T, U}
     return (T==U 
     && a.primitives==b.primitives
     && a.vertices==b.vertices 
+    && a.normals==b.normals
     && a.connections==b.connections 
     && a.colors==b.colors)
 end

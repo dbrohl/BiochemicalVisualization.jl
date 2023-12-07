@@ -33,8 +33,8 @@ end # TODO hybrid?
 end
 
 "Collection of parameters that determine how backbone-based vizualizations are created. "
-mutable struct BackboneConfig
-    stick_radius::Real
+mutable struct BackboneConfig{T}
+    stick_radius::T
     resolution::Int
 
     backbone_type::BackboneType.T
@@ -58,8 +58,8 @@ function ==(a::BackboneConfig, b::BackboneConfig)
 end
 
 "Similar to BackboneConfig, but the datatypes include Nothing"
-mutable struct PartialBackboneConfig
-    stick_radius::Union{Real, Nothing}
+mutable struct PartialBackboneConfig{T}
+    stick_radius::Union{T, Nothing}
     resolution::Union{Int, Nothing}
 
     backbone_type::Union{BackboneType.T, Nothing}

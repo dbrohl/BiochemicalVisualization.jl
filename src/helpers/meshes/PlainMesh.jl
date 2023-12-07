@@ -1,6 +1,7 @@
 """PlainMesh represents a 3D triangle mesh that is described by its vertices, the connections between them and the vertexcolors. """
 mutable struct PlainMesh{T}
     vertices::Matrix{T} # 3 rows, n cols
+    normals::Matrix{T}
     connections::Matrix{Int} # 3 rows, m cols, represents triangles
     colors::Vector{NTuple{3, Int}}
 end
@@ -13,6 +14,11 @@ function PlainMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, colors::AbstractVecto
     end
 
     vertices = hcat([collect(v.coords.coords) for v in mesh.vertices]...)
+    normals = similar(vertices)
+    for i = 1:Meshes.nvertices(mesh)
+        adjacent_face_normals = filter(f -> mesh.vertices[i] ∈ f, faces(mesh, 2))
+        normals[:, i] = mean(adjacent_face_normals)
+    end
 
     connects = Array{Int, 2}(undef, 3, Meshes.nelements(Meshes.topology(mesh)))
 
@@ -23,7 +29,7 @@ function PlainMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, colors::AbstractVecto
         connects[:, i] = collect(f.indices)
     end
 
-    PlainMesh{T}(vertices, connects, colors)
+    PlainMesh{T}(vertices, normals, connects, colors)
 end
 
 function PlainMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, color::NTuple{3, Int}) where {Dim, T, V, TP}
@@ -38,6 +44,7 @@ import Base.==
 function ==(a::PlainMesh{T}, b::PlainMesh{U}) where {T, U}
     return (T==U 
     && a.vertices==b.vertices 
+    && a.normals==b.normals
     && a.connections==b.connections 
     && a.colors==b.colors)
 end

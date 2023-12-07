@@ -13,7 +13,7 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
     println(stream, "ply")
     println(stream, "format ascii 1.0")
     println(stream, "element vertex $(length(representation.vertices) ÷ 3)")
-    for dim in ["x", "y", "z"]
+    for dim in ["x", "y", "z", "nx", "ny", "nz"]
         println(stream, "property float $dim") # TODO könnte auch double sein (4 oder 8 bytes)
     end
     
@@ -30,15 +30,18 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
         x = representation.vertices[(i-1)*3 + 1]
         y = representation.vertices[(i-1)*3 + 2]
         z = representation.vertices[(i-1)*3 + 3]
+        nx = representation.normals[(i-1)*3 + 1]
+        ny = representation.normals[(i-1)*3 + 2]
+        nz = representation.normals[(i-1)*3 + 3]
         r = parse(Int, colors[i][2:3], base=16)
         g = parse(Int, colors[i][4:5], base=16)
         b = parse(Int, colors[i][6:7], base=16)
-        println(stream, "$x $y $z $r $g $b")
+        println(stream, x, " ", y, " ", z, " ", nx, " ", ny, " ", nz, " ", r, " ", g, " ", b)
     end
 
     #Face List
     for i=1:(length(representation.connections) ÷ 3)
-        println(stream, "3 $(representation.connections[(i-1)*3+1]) $(representation.connections[(i-1)*3+2]) $(representation.connections[(i-1)*3+3])")
+        println(stream, "3 ", " ", representation.connections[(i-1)*3+1] , " ", representation.connections[(i-1)*3+2] , " ", representation.connections[(i-1)*3+3])
     end
 
     close(stream)

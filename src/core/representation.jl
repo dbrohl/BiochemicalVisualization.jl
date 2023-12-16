@@ -25,7 +25,7 @@ function Representation(mesh::PlainMesh{T}) where T
     n = vec(mesh.normals)
     c = vec(mesh.connections) .- 1
 
-    colors = ["#"*hex(RGB((c ./ 255)...)) for c in mesh.colors]
+    colors = ["#"*hex(RGB((c ./ 255)...)) for c in mesh.colors] # TODO profile
 
     return Representation{T}(
         vertices=p, 

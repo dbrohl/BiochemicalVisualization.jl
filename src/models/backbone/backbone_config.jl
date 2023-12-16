@@ -46,8 +46,9 @@ mutable struct BackboneConfig{T}
 end
 
 import Base.==
-function ==(a::BackboneConfig, b::BackboneConfig)
-    return (a.stick_radius==b.stick_radius
+function ==(a::BackboneConfig{T}, b::BackboneConfig{U}) where {T, U}
+    return (T==U
+    && a.stick_radius==b.stick_radius
     && a.resolution==b.resolution 
     && a.backbone_type==b.backbone_type 
     && a.color==b.color
@@ -58,8 +59,8 @@ function ==(a::BackboneConfig, b::BackboneConfig)
 end
 
 "Similar to BackboneConfig, but the datatypes include Nothing"
-mutable struct PartialBackboneConfig{T}
-    stick_radius::Union{T, Nothing}
+mutable struct PartialBackboneConfig
+    stick_radius::Union{Real, Nothing}
     resolution::Union{Int, Nothing}
 
     backbone_type::Union{BackboneType.T, Nothing}
@@ -93,9 +94,9 @@ function ==(a::PartialBackboneConfig, b::PartialBackboneConfig)
     && a.filter==b.filter)
 end
 
-function complete_config(partial::PartialBackboneConfig, template::BackboneConfig)
+function complete_config(partial::PartialBackboneConfig, template::BackboneConfig{T}) where {T}
     return BackboneConfig(
-        partial.stick_radius===nothing ? template.stick_radius : partial.stick_radius,
+        partial.stick_radius===nothing ? template.stick_radius : T(partial.stick_radius),
         partial.resolution===nothing ? template.resolution : partial.resolution,
 
         partial.backbone_type===nothing ? template.backbone_type : partial.backbone_type,

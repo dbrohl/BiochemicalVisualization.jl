@@ -137,7 +137,7 @@ function generate_geometry_at_point(
     frame_config::Union{Nothing,Tuple{Bool, Bool, Int, Int}}, 
     rectangle_width::T, 
     fixed_color::Union{NTuple{3, Int}, Nothing}, 
-    config::BackboneConfig) where T
+    config::BackboneConfig{T}) where T
     # generate cross-section vertices
     if(config.backbone_type==BackboneType.BACKBONE)
         circle_points, normals = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
@@ -194,7 +194,7 @@ function generate_geometry_at_point(
 end
 
 # assumes checked config (consistent and adjusted to T)
-function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
+function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
     fragment_list = fragments(chain) #TODO fragments/eachfragment
 
     # construct spline
@@ -400,6 +400,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig, fixed_c
             fixed_color = (0, 0, 255)
         end
 
+        # TODO iterativ statt als bulk # TODO resolution und filter koppeln
         circles[remaining_indices[current_index]] = @views generate_geometry_at_point(
             spline_points[:, current_index], 
             q[:, current_index],

@@ -246,8 +246,8 @@ stick(ac)          = display_model(ac; type="STICK")
 van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 
 
-function backbone(ac; path="BALL_export_backbone.ply", config=nothing)
-	default_config = BackboneConfig(0.2, 
+function backbone(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
+	default_config = BackboneConfig{T}(T(0.2), 
 			12, 
 			BackboneType.BACKBONE, 
 			Color.CHAIN, 
@@ -270,8 +270,8 @@ end
 # 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
 # end 
 
-function ribbon(ac; path="BALL_export_backbone.ply", config=nothing)
-	default_config = BackboneConfig(0.2, 
+function ribbon(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
+	default_config = BackboneConfig{T}(T(0.2), 
 			12, 
 			BackboneType.RIBBON, 
 			Color.CHAIN, 
@@ -289,8 +289,8 @@ function ribbon(ac; path="BALL_export_backbone.ply", config=nothing)
 	export_mesh_representation_to_ply(path, representation)
 end
 
-function cartoon(ac; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing)
-	default_config = BackboneConfig(0.2, 
+function cartoon(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
+	default_config = BackboneConfig{T}(T(0.2), 
 			12, 
 			BackboneType.CARTOON, 
 			Color.SECONDARY_STRUCTURE, 

@@ -2,11 +2,12 @@
 Returns the indices and the number of points that should not be removed. 
 Whenever the angle between the last selected and the current tangent is too large, the current index is added. 
 
-* When colors!=nothing, too large hue distances are prevented as well.
+* If with_color, a linear hsv interpolation is assumed. 
+  When colors change too much (in this interpolation), the current index is added to the result. 
 * Vectors in q and r should be normalized!
 * fixed_indices contains all indices that cannot be removed and will definitely be contained in the return value. 
 """
-function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::AbstractVector{Int}, colors::Union{Nothing, AbstractVector{NTuple{3, Int}}}=nothing) where T
+function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::AbstractVector{Int}; with_color::Bool=false) where T
 
     target_indices = fill(-1, size(q, 2))
     if(!issorted(fixed_indices))
@@ -15,7 +16,7 @@ function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::Abst
 
     degree_threshold = 5
     radian_threshold = degree_threshold/360*2*π 
-    color_degree_threshold = 45
+    color_threshold = 0.125 # max part of the rainbow that will be interpolated (vs an additional frame to ensure proper colors)
 
     dot_prod_q = T(0)
     dot_prod_r = T(0)
@@ -33,13 +34,7 @@ function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::Abst
             dot_prod_q = @views dot(q[:, last_remaining_index], q[:, i]) # alloc
             dot_prod_r = @views dot(r[:, last_remaining_index], r[:, i])
 
-            large_color_distance = false
-            if(colors!==nothing)
-                colA = convert(HSL, RGB(colors[last_remaining_index]./255...)).h
-                colB = convert(HSL, RGB(colors[i]./255...)).h
-
-                large_color_distance = abs(colA-colB)>color_degree_threshold
-            end
+            large_color_distance = with_color && (i-last_remaining_index)/size(q, 2)>color_threshold
 
             if(abs(dot_prod_q)>1 || abs(acos(dot_prod_q))> radian_threshold
                 || abs(dot_prod_r)>1 || abs(acos(dot_prod_r))> radian_threshold

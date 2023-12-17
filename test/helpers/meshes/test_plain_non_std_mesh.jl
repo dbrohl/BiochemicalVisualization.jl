@@ -1,28 +1,21 @@
 @testitem "PlainNonStdMesh" begin
     using BiochemicalVisualization: PlainNonStdMesh
-    import Meshes
 
-    points = [0 1 0
-    0 0 1
-    0 0 0]
+    meshes = []
+    for i=1:5
+        push!(meshes, PlainNonStdMesh([0 1 0;0 0 1; 0 0 0 ], [0 0 0; 0 0 0; 1 1 1], [[1,2,3]], repeat([(255, 0, 0)], 3)))
+    end
+    @test meshes[1]==meshes[2]
 
-    simplemesh = Meshes.SimpleMesh(map(p->Tuple(p), eachcol(points)), [Meshes.connect((1, 2, 3))])
-    plainmesh = PlainNonStdMesh(simplemesh, (0, 127, 0))
+    meshes[2].vertices = [0 1 1;0 0 1; 0 0 0 ]
+    @test meshes[1]!=meshes[2]
 
-    @test plainmesh.vertices == points
-    println(plainmesh.connections, typeof(plainmesh.connections))
-    @test plainmesh.connections == [[1,2,3]]
-    @test plainmesh.colors == [(0, 127, 0), (0, 127, 0), (0, 127, 0)]
+    meshes[3].normals = [0 0 0; 0 0 0; -1 -1 -1]
+    @test meshes[1]!=meshes[3]
 
-    # faces that are not triangles are allowed
-    points2 = [0 1 0 1
-    0 0 1 1
-    0 0 0 0]
+    meshes[4].connections = [[3,2,1]]
+    @test meshes[1]!=meshes[4]
 
-    simplemesh = Meshes.SimpleMesh(map(p->Tuple(p), eachcol(points2)), [Meshes.connect((1, 2, 3, 4))])
-    plainmesh = PlainNonStdMesh(simplemesh, (0, 127, 0))
-
-    @test plainmesh.vertices == points2
-    @test plainmesh.connections == [[1,2,3,4]]
-    @test plainmesh.colors == [(0, 127, 0), (0, 127, 0), (0, 127, 0), (0, 127, 0)]
+    meshes[5].colors = [(255, 0, 0), (0, 255, 0), (0, 255, 0)]
+    @test meshes[1]!=meshes[5]
 end

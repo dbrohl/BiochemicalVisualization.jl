@@ -171,10 +171,7 @@ const SS_COLORS = Dict(
 	SecondaryStructure.HELIX => (255, 75, 120), 
 	SecondaryStructure.SHEET => (255, 150, 0))
 
-hex_colors = [hex(RGB((e ./ 255)...)) for e in ELEMENT_COLORS]
-
-element_color_web(e) = "#"*lowercase(get(hex_colors, Int(e), hex_colors[end]))
-element_color_rgb(e) = get(ELEMENT_COLORS, Int(e), hex_colors[end])
+element_color_web(e) = rgb_to_hex(e, prefix="#")
 
 function prepare_model(ac::AbstractAtomContainer; type="BALL_AND_STICK")
 	if type == "BACKBONE"

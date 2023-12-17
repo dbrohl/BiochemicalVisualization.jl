@@ -2,7 +2,6 @@ module BiochemicalVisualization
 
 using BiochemicalAlgorithms
 
-using Colors
 import GeometryBasics
 import Meshes
 using JSServe

@@ -19,7 +19,7 @@
     0 0 1 1
     0 0 0 0]
 
-    simplemesh = Meshes.SimpleMesh(map(p->Tuple(p), eachcol(points)), [Meshes.connect((1, 2, 3, 4))])
+    simplemesh = Meshes.SimpleMesh(map(p->Tuple(p), eachcol(points2)), [Meshes.connect((1, 2, 3, 4))])
     @test_throws ErrorException PlainMesh(simplemesh, (0, 127, 0))
 
 end

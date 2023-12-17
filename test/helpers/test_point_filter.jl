@@ -17,14 +17,14 @@
     constants2 = repeat([0.0,1,0], 1, 6)
     fixed = [1, 4, 5]
 
-    # second element really shows the number of indices!=1
+    # second element really shows the number of indices!=-1
     tup = filter_points_threshold(constants, constants2, Vector{Int}())
     @test length(filter(x -> x!=-1, tup[1]))==tup[2]
 
     tup = filter_points_threshold(constants, constants2, fixed)
     @test length(filter(x -> x!=-1, tup[1]))==tup[2]
 
-    tup = filter_points_threshold(constants, constants2, Vector{Int}(), [(255, 0, 0), (255, 255, 0), (0, 255, 0), (0, 255, 255), (0, 0, 255), (255, 0, 255)])
+    tup = filter_points_threshold(constants, constants2, Vector{Int}(), with_color=true)
     @test length(filter(x -> x!=-1, tup[1]))==tup[2]
 
     # no change -> only one index remains
@@ -39,7 +39,7 @@
     end
         
     # changing color results in more remaining points
-    @test filter_points_threshold(constants, constants2, Vector{Int}(), [(255, 0, 0), (255, 255, 0), (0, 255, 0), (0, 255, 255), (0, 0, 255), (255, 0, 255)])[2]>1
+    @test filter_points_threshold(repeat([1.0,0,0], 1, 12), repeat([0.0,1,0], 1, 12), Vector{Int}(), with_color=true)[2]>1
 
     # changing tangents or normals lead to more remaining points
     up = Matrix{Float64}(undef, 3, 6)
@@ -48,7 +48,5 @@
     end
     @test filter_points_threshold(up, constants2, Vector{Int}())[2]>1
     @test filter_points_threshold(constants2, up, Vector{Int}())[2]>1
-
-
 
 end

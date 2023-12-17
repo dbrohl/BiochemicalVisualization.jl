@@ -11,7 +11,7 @@ function insert_sorted!(array, elem)
     insert!(array, index, elem)
 end
 
-function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = nothing) # TODO types?
+function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices) # TODO types?
     if(index<1 || index>size(spline_points, 2))
         throw(ArgumentError("index has to be in [1, $(size(spline_points, 2))], but was $index"))
     end
@@ -21,11 +21,8 @@ function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to
     s = @views hcat(s[:, 1:index], s[:, index], s[:, index+1:end])
     rectangle_widths = @views vcat(rectangle_widths[1:index], rectangle_widths[index], rectangle_widths[index+1:end])
     sample_to_residue_indices = @views vcat(sample_to_residue_indices[1:index], sample_to_residue_indices[index], sample_to_residue_indices[index+1:end])
-    if(rainbow_colors !== nothing)
-        rainbow_colors = @views vcat(rainbow_colors[1:index], rainbow_colors[index], rainbow_colors[index+1:end])
-    end
 
-    return spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors
+    return spline_points, q, r, s, rectangle_widths, sample_to_residue_indices
 end
 
 #assumes sorted index_array!
@@ -222,11 +219,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
 
     end
-    if(config.color==Color.RAINBOW)
-        color_range = range(HSV(0,1,1), stop=HSV(360,1,1), length=size(spline_points, 2))
-        rgb_colors = map(hsv-> convert(RGB, hsv), color_range)
-        rainbow_colors = map(rgb->map(channel->Int(floor(channel*255)), (rgb.r, rgb.g, rgb.b)), rgb_colors)
-    end
 
     fixed_indices::Vector{Int} = [] # collection of all frames that should not be removed by filtering
 
@@ -238,7 +230,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
         for i=eachindex(arrow_starts) # add frame at the begin of the arrow head
             insertion_idx = arrow_starts[i]
-            spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+            spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
             rectangle_widths[arrow_starts[i]+(n_to_c ? 0 : 1)] = T(1.0)
 
             # adjust indices after the insertion site
@@ -270,8 +262,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
                 if(small_to_large)
                     insertion_idx = a-1
                     #log_info(extra_frames, insertion_idx, fixed_indices)
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
+                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
                     sample_to_residue_indices[insertion_idx+1] = nothing
                     sample_to_residue_indices[insertion_idx+2] = nothing
                     
@@ -288,8 +280,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
                 else
                     insertion_idx = a
                     #log_info(extra_frames, insertion_idx, fixed_indices)
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, rainbow_colors = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices, (config.color==Color.RAINBOW ? rainbow_colors : nothing))
+                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
+                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
                     sample_to_residue_indices[insertion_idx] = nothing
                     sample_to_residue_indices[insertion_idx+1] = nothing
                     
@@ -358,21 +350,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
         end
 
         local remaining_indices::Vector{Int}
-        if(config.color==Color.RAINBOW)
-            remaining_indices, count = filter_points_threshold(q, r, fixed_indices, rainbow_colors) # prevents too large distances in colors as well
-        else
-            remaining_indices, count = filter_points_threshold(q, r, fixed_indices)
-        end
-        # log_info(point_filter, "Remaining points: $(length(remaining_indices))/$(size(spline_points, 2))\n Filtered: $(size(spline_points, 2)-length(remaining_indices)) ($(length(fixed_indices)) fixed)")
-        # spline_points = spline_points[:, remaining_indices]
-        # sample_to_residue_indices = sample_to_residue_indices[remaining_indices]
-        # q = q[:, remaining_indices]
-        # r = r[:, remaining_indices]
-        # s = s[:, remaining_indices]
-        # rectangle_widths = rectangle_widths[remaining_indices]
-        # if(config.color==Color.RAINBOW)
-        #     rainbow_colors = rainbow_colors[remaining_indices]
-        # end
+        remaining_indices, count = filter_points_threshold(q, r, fixed_indices, with_color=(config.color==Color.RAINBOW))
     end
 
     log_info(types, "Type of spline points: ", typeof(spline_points))
@@ -395,7 +373,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
         
         if(config.color==Color.RAINBOW)
-            fixed_color = rainbow_colors[current_index]
+            fixed_color = rainbow(current_index/size(spline_points, 2))
         elseif(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
             fixed_color = (0, 0, 255)
         end
@@ -466,7 +444,7 @@ function prepare_backbone_model(
     if(config.color==Color.UNIFORM)
         uniform_color = (255, 0, 0)
     elseif(config.color==Color.CHAIN)
-        chain_colors = map(c->map(channel->Int(channel*255), (c.r, c.g, c.b)), collect(distinguishable_colors(nchains(ac)+1))[2:end]) #alloc
+        chain_colors = n_colors(nchains(ac))
     end
 
     empty_mesh = PlainMesh(zeros(T, (3, 0)), zeros(T, (3, 0)), zeros(Int, (3, 0)), Vector{NTuple{3, Int}}())

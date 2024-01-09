@@ -11,19 +11,6 @@ function insert_sorted!(array, elem)
     insert!(array, index, elem)
 end
 
-function insert_frame(index, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices) # TODO types?
-    if(index<1 || index>size(spline_points, 2))
-        throw(ArgumentError("index has to be in [1, $(size(spline_points, 2))], but was $index"))
-    end
-    spline_points = @views hcat(spline_points[:, 1:index], spline_points[:, index], spline_points[:, index+1:end])
-    q = @views hcat(q[:, 1:index], q[:, index], q[:, index+1:end])
-    r = @views hcat(r[:, 1:index], r[:, index], r[:, index+1:end])
-    s = @views hcat(s[:, 1:index], s[:, index], s[:, index+1:end])
-    rectangle_widths = @views vcat(rectangle_widths[1:index], rectangle_widths[index], rectangle_widths[index+1:end])
-    sample_to_residue_indices = @views vcat(sample_to_residue_indices[1:index], sample_to_residue_indices[index], sample_to_residue_indices[index+1:end])
-
-    return spline_points, q, r, s, rectangle_widths, sample_to_residue_indices
-end
 
 #assumes sorted index_array!
 function adjust_indices!(index_array, threshold)
@@ -32,6 +19,24 @@ function adjust_indices!(index_array, threshold)
             index_array[i] += 1
         end
     end
+end
+
+function get_ss_count(sample_indices, spline)
+    ss_count = Dict{BiochemicalAlgorithms.SecondaryStructure.T, Int}(
+        BiochemicalAlgorithms.SecondaryStructure.NONE => 0, 
+        BiochemicalAlgorithms.SecondaryStructure.HELIX => 0, 
+        BiochemicalAlgorithms.SecondaryStructure.SHEET => 0
+    )
+
+    prev_ss = nothing
+    for index in sample_indices
+        curr_ss = spline.residue_info_dict[index][2]
+        if(prev_ss!=curr_ss)
+            ss_count[curr_ss]+=1
+            prev_ss = curr_ss
+        end
+    end
+    return ss_count
 end
 
 function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_residue_indices, residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}) where T
@@ -192,6 +197,10 @@ end
 
 # assumes checked config (consistent and adjusted to T)
 function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
+    if(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
+        fixed_color = (0, 0, 255)
+    end
+
     fragment_list = fragments(chain) #TODO fragments/eachfragment
 
     # construct spline
@@ -220,93 +229,98 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
     end
 
-    fixed_indices::Vector{Int} = [] # collection of all frames that should not be removed by filtering
 
-    # preparation for arrows
+    ss_count = get_ss_count(sample_to_residue_indices, spline)
+    num_inserted_frames = 0
     if(config.backbone_type==BackboneType.CARTOON)
+        num_inserted_frames += 2*(ss_count[BiochemicalAlgorithms.SecondaryStructure.NONE]+ss_count[BiochemicalAlgorithms.SecondaryStructure.HELIX]+ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET]-1) # changes in secondary structure
+        num_inserted_frames += ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET] # start of arrow heads
+    end
+    inserted_frames = Vector{Tuple{Vector{T}, Vector{T}, Vector{T}, Vector{T}, T, Union{Int, Nothing}, Union{Nothing, Tuple{Bool, Bool, Int, Int}}}}(undef, num_inserted_frames)
+    inserted_index_mappings = Vector{Int}(undef, num_inserted_frames)
+
+    fixed_indices::Vector{Int} = [] # collection of all frames that should not be removed by filtering 
+
+    arrow_insert_indices = collect(1:ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET]) # stores indices that are left out for arrow frames later
+    # add frames when secondary structure changes and at arrow head starts
+    if(config.backbone_type==BackboneType.CARTOON)
+        # arrows part 1
         rectangle_widths, arrow_starts, arrow_frame_indices, n_to_c = compute_frame_widths(fragment_list, sample_to_residue_indices, spline.residue_info_dict)
         append!(fixed_indices, arrow_frame_indices) # the arrow part with changing frame widths should not be discarded by filter methods
         sort!(fixed_indices)
 
-        for i=eachindex(arrow_starts) # add frame at the begin of the arrow head
-            insertion_idx = arrow_starts[i]
-            spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
-            rectangle_widths[arrow_starts[i]+(n_to_c ? 0 : 1)] = T(1.0)
 
-            # adjust indices after the insertion site
-            adjust_indices!(fixed_indices, arrow_starts[i])
-            adjust_indices!(arrow_starts, arrow_starts[i])
-
-            # newly inserted frame should not be removed by filtering
-            insert_sorted!(fixed_indices, insertion_idx)
-
-        end
-
-    end
-
-    # add frames when secondary structure changes # TODO what if n_to_c is false?
-    if(config.backbone_type==BackboneType.CARTOON)
-        frame_config = Dict{Int, Tuple{Bool, Bool, Int, Int}}()
+        # ss changes
+        println(sample_to_residue_indices)
         prev_res_idx = sample_to_residue_indices[1]
         a = 1
-        while(a<=length(sample_to_residue_indices))
-            res_idx = sample_to_residue_indices[a]
+        b = 1
+
+        if spline.residue_info_dict[prev_res_idx][2]==BiochemicalAlgorithms.SecondaryStructure.SHEET # detect sheets at the beginning
+            arrow_insert_indices[a] = b
+            log_info(extra_frames, "skipping index $b for arrow frames")
+            a+=1
+            b+=1
+        end
+
+        for i=eachindex(sample_to_residue_indices)
+            
+            res_idx = sample_to_residue_indices[i]
             prev_ss = spline.residue_info_dict[prev_res_idx][2]
             curr_ss = spline.residue_info_dict[res_idx][2]
 
+        
             if(res_idx!=prev_res_idx && prev_ss!=curr_ss) # ss change
-                small_to_large = (n_to_c && (prev_ss==BiochemicalAlgorithms.SecondaryStructure.NONE || prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET) 
-                                || (!n_to_c && curr_ss==BiochemicalAlgorithms.SecondaryStructure.HELIX))
-                #log_info(extra_frames, "$ss_a -> $ss_b, small_to_large: $small_to_large")
-
+                small_to_large = ((n_to_c && (prev_ss==BiochemicalAlgorithms.SecondaryStructure.NONE || prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)) || (!n_to_c && curr_ss==BiochemicalAlgorithms.SecondaryStructure.HELIX))
                 if(small_to_large)
-                    insertion_idx = a-1
-                    #log_info(extra_frames, insertion_idx, fixed_indices)
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
-                    sample_to_residue_indices[insertion_idx+1] = nothing
-                    sample_to_residue_indices[insertion_idx+2] = nothing
+                    insertion_idx = i-1
+                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, true, prev_res_idx, res_idx))
+                    inserted_index_mappings[b] = insertion_idx+1
+                    log_info(extra_frames, "inserting A at $b")
+                    b+=1
+                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, false, res_idx, res_idx))
+                    inserted_index_mappings[b] = insertion_idx+1
+                    log_info(extra_frames, "inserting A at $b")
+                    b+=1
                     
-                    frame_config[insertion_idx+1] = (small_to_large, true, prev_res_idx, res_idx)
-                    frame_config[insertion_idx+2] = (small_to_large, false, res_idx, res_idx)
-
-                    adjust_indices!(fixed_indices, insertion_idx+1)
-                    adjust_indices!(fixed_indices, insertion_idx+1)
-
-                    insert_sorted!(fixed_indices, insertion_idx)
-                    insert_sorted!(fixed_indices, insertion_idx+1)
-                    insert_sorted!(fixed_indices, insertion_idx+2)
-                    #log_info(extra_frames, insertion_idx, fixed_indices)
                 else
-                    insertion_idx = a
-                    #log_info(extra_frames, insertion_idx, fixed_indices)
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
-                    spline_points, q, r, s, rectangle_widths, sample_to_residue_indices = insert_frame(insertion_idx, spline_points, q, r, s, rectangle_widths, sample_to_residue_indices)
-                    sample_to_residue_indices[insertion_idx] = nothing
-                    sample_to_residue_indices[insertion_idx+1] = nothing
-                    
-                    frame_config[insertion_idx] = (small_to_large, true, prev_res_idx, prev_res_idx)
-                    frame_config[insertion_idx+1] = (small_to_large, false, res_idx, prev_res_idx)
-
-                    adjust_indices!(fixed_indices, insertion_idx)
-                    adjust_indices!(fixed_indices, insertion_idx)
-
-                    insert_sorted!(fixed_indices, insertion_idx)
-                    insert_sorted!(fixed_indices, insertion_idx+1)
-                    insert_sorted!(fixed_indices, insertion_idx+2)
-                    #log_info(extra_frames, insertion_idx, fixed_indices)
-                    
+                    insertion_idx = i
+                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, true, prev_res_idx, prev_res_idx))
+                    inserted_index_mappings[b] = insertion_idx
+                    log_info(extra_frames, "inserting B at $b")
+                    b+=1
+                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing,  (small_to_large, false, res_idx, prev_res_idx))
+                    inserted_index_mappings[b] = insertion_idx+1
+                    log_info(extra_frames, "inserting B at $b")
+                    b+=1                   
                 end
-                a+=2
-                #log_info(extra_frames)
+                insert_sorted!(fixed_indices, insertion_idx)
+
+                if(curr_ss == BiochemicalAlgorithms.SecondaryStructure.SHEET) # skip array elements for arrow frames
+                    arrow_insert_indices[a] = b
+                    log_info(extra_frames, "skipping index $b for arrow frames")
+                    a+=1
+                    b+=1
+                end
             
             end
             prev_res_idx = res_idx
-            a+=1
+        end
+
+
+        # arrows part 2
+        a = 1
+        for i=eachindex(arrow_starts) # add frame at the begin of the arrow head
+            insertion_idx = arrow_starts[i]
+            inserted_frames[arrow_insert_indices[a]] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], T(1.0), sample_to_residue_indices[insertion_idx], nothing)
+            inserted_index_mappings[arrow_insert_indices[a]] = insertion_idx+(n_to_c ? 0 : 1)
+            log_info(extra_frames, "inserting at $(arrow_insert_indices[a])")
+            a += 1
         end
 
 
     end
+
 
 
     # filter
@@ -350,46 +364,83 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
         end
 
         local remaining_indices::Vector{Int}
-        remaining_indices, count = filter_points_threshold(q, r, fixed_indices, with_color=(config.color==Color.RAINBOW))
+        remaining_indices, remaining_count = filter_points_threshold(q, r, fixed_indices, with_color=(config.color==Color.RAINBOW))
     end
 
     log_info(types, "Type of spline points: ", typeof(spline_points))
 
+    log_info(extra_frames, "inserted_index_mappings", inserted_index_mappings)
+    log_info(extra_frames, "remaining_indices", remaining_indices)
 
-    circles = Vector{PlainNonStdMesh{T}}(undef, count)
+
+    circles = Vector{PlainNonStdMesh{T}}(undef, remaining_count+num_inserted_frames)
     # iterate and create vertices
-    for current_index=axes(spline_points, 2)
-        if(config.filter!=Filter.NONE && remaining_indices[current_index]==-1)
+    index_regular_frames = 1
+    index_inserted_frames = 1
+    i = 1 # currently highest index of index_regular_frames and the values of index_inserted_frames
+    j = 1 # count of inserted frames (including the current one)
+    while index_inserted_frames<=num_inserted_frames || index_regular_frames<=length(remaining_indices)
+        log_info(extra_frames, "i=$i, j=$j, index_regular_frames=$index_regular_frames, index_inserted_frames=$index_inserted_frames")
+
+        if(config.color==Color.RAINBOW)
+            fixed_color = rainbow(j/(remaining_count+num_inserted_frames))
+        end
+
+        if index_inserted_frames<=num_inserted_frames && inserted_index_mappings[index_inserted_frames] == i
+            # insert this first
+            log_info(extra_frames, "inserted frame")
+            
+            # TODO iterativ statt als bulk # TODO resolution und filter koppeln
+            circles[j] = @views generate_geometry_at_point(
+                inserted_frames[index_inserted_frames][1],
+                inserted_frames[index_inserted_frames][2],
+                inserted_frames[index_inserted_frames][3],
+                inserted_frames[index_inserted_frames][4], 
+                spline.residue_info_dict,
+                inserted_frames[index_inserted_frames][6],
+                inserted_frames[index_inserted_frames][7],
+                inserted_frames[index_inserted_frames][5],
+                fixed_color,
+                config)
+
+
+            index_inserted_frames+=1
+            j += 1
             continue
         end
-        # sanity check: frame should be orthogonal
-        @views if(!approx_zero(dot(q[:, current_index], r[:, current_index])) || !approx_zero(dot(q[:, current_index], s[:, current_index])) || !approx_zero(dot(s[:, current_index], r[:, current_index])))
-            log_info(frame_rotation, current_index, " wrong angles ", dot(q[:, current_index], r[:, current_index]), " ", dot(q[:, current_index], s[:, current_index]), " ", dot(s[:, current_index], r[:, current_index]), " # ", q[:, current_index], " ", r[:, current_index], " ", s[:, current_index])
+
+        if (config.filter==Filter.NONE || (config.filter==Filter.ANGLE && remaining_indices[index_regular_frames]!=-1))
+            # insert regular frame
+            log_info(extra_frames, "regular frame")
+
+            # TODO iterativ statt als bulk # TODO resolution und filter koppeln
+            circles[j] = @views generate_geometry_at_point(
+                spline_points[:, index_regular_frames], 
+                q[:, index_regular_frames],
+                r[:, index_regular_frames], 
+                s[:, index_regular_frames], 
+                spline.residue_info_dict,
+                sample_to_residue_indices[index_regular_frames],
+                nothing,
+                config.backbone_type==BackboneType.CARTOON ? rectangle_widths[index_regular_frames] : T(1.0),
+                fixed_color,
+                config)
+
+
+            index_regular_frames += 1
+            i += 1
+            j += 1
+            continue
         end
 
-        # debug output
-        # frameA = local_frame_mesh(spline_points[:, current_index], q[:, current_index], r[:, current_index], s[:, current_index])
-        # push!(framesA, frameA)
+        index_regular_frames += 1
+        i+=1
 
-        
-        if(config.color==Color.RAINBOW)
-            fixed_color = rainbow(current_index/size(spline_points, 2))
-        elseif(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
-            fixed_color = (0, 0, 255)
-        end
 
-        # TODO iterativ statt als bulk # TODO resolution und filter koppeln
-        circles[remaining_indices[current_index]] = @views generate_geometry_at_point(
-            spline_points[:, current_index], 
-            q[:, current_index],
-            r[:, current_index], 
-            s[:, current_index], 
-            spline.residue_info_dict,
-            sample_to_residue_indices[current_index],
-            (config.backbone_type==BackboneType.CARTOON && current_index ∈ keys(frame_config)) ? frame_config[current_index] : nothing,
-            config.backbone_type==BackboneType.CARTOON ? rectangle_widths[current_index] : T(1.0),
-            fixed_color,
-            config)
+        # # sanity check: frame should be orthogonal
+        # @views if(!approx_zero(dot(q[:, current_index], r[:, current_index])) || !approx_zero(dot(q[:, current_index], s[:, current_index])) || !approx_zero(dot(s[:, current_index], r[:, current_index])))
+        #     log_info(frame_rotation, current_index, " wrong angles ", dot(q[:, current_index], r[:, current_index]), " ", dot(q[:, current_index], s[:, current_index]), " ", dot(s[:, current_index], r[:, current_index]), " # ", q[:, current_index], " ", r[:, current_index], " ", s[:, current_index])
+        # end
     end
 
     i_a = -1

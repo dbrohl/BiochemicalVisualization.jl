@@ -175,81 +175,43 @@ end
 
 """
 Adds faces between circles to create the surface of a tube. 
-When endpoints is passed to the function, the tube will be closed (by a flat plane) at the start and the end. 
+The last two vertices are assumed to be the start- and end-cap respectively. 
 """
-function connect_circles_to_tube(circles::AbstractVector{PlainNonStdMesh{T}}, endpoints::Union{Nothing, NTuple{2, NTuple{2, AbstractVector{T}}}} = nothing) where {T}
-
-    if(length(circles)==0)
-        return PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
-    end
-
-    resolution = size(circles[1].vertices, 2)
-
-    # collect all points
-    matrix_length = (length(circles) * resolution) + (endpoints===nothing ? 0 : 2)
-    points = Matrix{T}(undef, 3, matrix_length)
-    normals = Matrix{T}(undef, 3, matrix_length)
-    colors = Vector{NTuple{3, Int}}(undef, matrix_length)
-    for (i, circle) in enumerate(circles)
-        points[:, (i-1)*resolution+1:i*resolution] = circle.vertices
-        normals[:, (i-1)*resolution+1:i*resolution] = circle.normals
-        colors[(i-1)*resolution+1:i*resolution] = circle.colors
-    end
-    if(endpoints!==nothing)
-        points[:, end-1] = endpoints[1][1]
-        normals[:, end-1] = endpoints[1][2]
-        colors[end-1] = circles[1].colors[1]
-        points[:, end] = endpoints[2][1]
-        normals[:, end] = endpoints[2][2]
-        colors[end] = circles[end].colors[1]
-
-    end
-
-    
-    connections = Array{Int, 2}(undef, 3, (length(circles)-1)*(2*resolution) + (endpoints===nothing ? 0 : 2*resolution))
-    
+function add_faces_to_tube_mesh!(tube_mesh::PlainMesh{T}, resolution::Int, ncircles::Int) where {T}
     offset = 0
     connection_i = 1
     prev_indices = nothing
-    color_count = 0
-    for c in circles
+    for index = 1:ncircles
 
         # add connections between circles
-        current_indices = (offset+1):(offset+nvertices(c))
+        current_indices = (offset+1):(offset+resolution)
         if(prev_indices !== nothing)
             @assert length(current_indices)==length(prev_indices)
 
-            connections[1, connection_i:connection_i+resolution-1] = current_indices'
-            connections[2, connection_i:connection_i+resolution-1] = prev_indices'
-            connections[3, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
+            tube_mesh.connections[1, connection_i:connection_i+resolution-1] = current_indices'
+            tube_mesh.connections[2, connection_i:connection_i+resolution-1] = prev_indices'
+            tube_mesh.connections[3, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
             connection_i += resolution
 
-            connections[1, connection_i:connection_i+resolution-1] = current_indices'
-            connections[2, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
-            connections[3, connection_i:connection_i+resolution-1] = circshift(current_indices, 1)'
+            tube_mesh.connections[1, connection_i:connection_i+resolution-1] = current_indices'
+            tube_mesh.connections[2, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
+            tube_mesh.connections[3, connection_i:connection_i+resolution-1] = circshift(current_indices, 1)'
             connection_i += resolution
         end
 
         prev_indices = current_indices
-        offset += nvertices(c)
+        offset += resolution
     end
 
-    if(endpoints!==nothing) # create ends
-        start_point_index = size(points, 2)-1
-        connections[1, connection_i:connection_i+resolution-1] = collect(1:resolution)'
-        connections[2, connection_i:connection_i+resolution-1] = circshift(1:resolution, 1)'
-        connections[3, connection_i:connection_i+resolution-1] = repeat([start_point_index], resolution)'
-        connection_i += resolution
+    start_point_index = size(tube_mesh.vertices, 2)-1
+    tube_mesh.connections[1, connection_i:connection_i+resolution-1] = collect(1:resolution)'
+    tube_mesh.connections[2, connection_i:connection_i+resolution-1] = circshift(1:resolution, 1)'
+    tube_mesh.connections[3, connection_i:connection_i+resolution-1] = repeat([start_point_index], resolution)'
+    connection_i += resolution
 
-        connections[1, connection_i:connection_i+resolution-1] = collect(start_point_index-resolution:start_point_index-1)'
-        connections[2, connection_i:connection_i+resolution-1] = circshift(start_point_index-resolution:start_point_index-1, 1)'
-        connections[3, connection_i:connection_i+resolution-1] = repeat([start_point_index+1], resolution)'
-        connection_i += resolution
-    end
+    tube_mesh.connections[1, connection_i:connection_i+resolution-1] = collect(start_point_index-resolution:start_point_index-1)'
+    tube_mesh.connections[2, connection_i:connection_i+resolution-1] = circshift(start_point_index-resolution:start_point_index-1, 1)'
+    tube_mesh.connections[3, connection_i:connection_i+resolution-1] = repeat([start_point_index+1], resolution)'
+    connection_i += resolution
 
-
-    log_info(types, "Type of points in connect_tube: ", typeof(points))
-
-    
-    return PlainMesh{T}(points, normals, connections, colors)
 end

@@ -129,7 +129,9 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
     return rectangle_widths, arrow_starts, arrow_frame_indices, n_to_c
 end
 
-function generate_geometry_at_point(
+function generate_geometry_at_point!(
+    result_mesh::PlainMesh{T},
+    result_mesh_index::Int, 
     point::AbstractVector{T}, 
     tangent::AbstractVector{T},
     normal::AbstractVector{T}, 
@@ -170,12 +172,13 @@ function generate_geometry_at_point(
             end
         end
     end 
-    # add edges
-    circle = PlainNonStdMesh(circle_points, normals, Vector{Vector{Int}}(), Vector{NTuple{3, Int}}(undef, config.resolution))
+    result_mesh.vertices[:, (result_mesh_index-1)*config.resolution+1:result_mesh_index*config.resolution] = circle_points
+    result_mesh.normals[:, (result_mesh_index-1)*config.resolution+1:result_mesh_index*config.resolution] = normals
 
     # color
+    color = nothing
     if(fixed_color!==nothing)
-        color!(circle, fixed_color)
+        color = fixed_color
     elseif(config.color==Color.SECONDARY_STRUCTURE)
         if(linked_residue_idx===nothing)
             residue_idx = frame_config[4]
@@ -183,16 +186,18 @@ function generate_geometry_at_point(
             residue_idx = linked_residue_idx
         end
         structure = residue_info_dict[residue_idx][2]
-        color!(circle, SS_COLORS[structure])
+        color = SS_COLORS[structure]
     elseif(config.color==Color.RESIDUE)
         if(linked_residue_idx===nothing)
             residue_idx = frame_config[4]
         else
             residue_idx = linked_residue_idx
         end
-        color!(circle, AA_COLORS[residue_info_dict[residue_idx][1]])
+        color = AA_COLORS[residue_info_dict[residue_idx][1]]
     end
-    return circle
+    for i=(result_mesh_index-1)*config.resolution+1:result_mesh_index*config.resolution
+        result_mesh.colors[i] = color
+    end
 end
 
 # assumes checked config (consistent and adjusted to T)
@@ -251,7 +256,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
 
         # ss changes
-        println(sample_to_residue_indices)
         prev_res_idx = sample_to_residue_indices[1]
         a = 1
         b = 1
@@ -373,13 +377,15 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     log_info(extra_frames, "remaining_indices", remaining_indices)
 
 
-    circles = Vector{PlainNonStdMesh{T}}(undef, remaining_count+num_inserted_frames)
+    num_vertices = (remaining_count+num_inserted_frames)*config.resolution + 2 # end "caps"
+    num_faces = (remaining_count+num_inserted_frames-1)*config.resolution*2 + 2*config.resolution # connections between neighbor circles + connections to the end points
+    spline_mesh = PlainMesh(Array{T}(undef, 3, num_vertices), Array{T}(undef, 3, num_vertices), Array{Int}(undef, 3, num_faces), Vector{NTuple{3, Int}}(undef, num_vertices))
     # iterate and create vertices
     index_regular_frames = 1
     index_inserted_frames = 1
     i = 1 # currently highest index of index_regular_frames and the values of index_inserted_frames
     j = 1 # count of inserted frames (including the current one)
-    while index_inserted_frames<=num_inserted_frames || index_regular_frames<=length(remaining_indices)
+    @time while index_inserted_frames<=num_inserted_frames || index_regular_frames<=length(remaining_indices)
         log_info(extra_frames, "i=$i, j=$j, index_regular_frames=$index_regular_frames, index_inserted_frames=$index_inserted_frames")
 
         if(config.color==Color.RAINBOW)
@@ -391,7 +397,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
             log_info(extra_frames, "inserted frame")
             
             # TODO iterativ statt als bulk # TODO resolution und filter koppeln
-            circles[j] = @views generate_geometry_at_point(
+            @views generate_geometry_at_point!(spline_mesh, j,
                 inserted_frames[index_inserted_frames][1],
                 inserted_frames[index_inserted_frames][2],
                 inserted_frames[index_inserted_frames][3],
@@ -403,7 +409,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
                 fixed_color,
                 config)
 
-
             index_inserted_frames+=1
             j += 1
             continue
@@ -414,7 +419,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
             log_info(extra_frames, "regular frame")
 
             # TODO iterativ statt als bulk # TODO resolution und filter koppeln
-            circles[j] = @views generate_geometry_at_point(
+            @views generate_geometry_at_point!(spline_mesh, j,
                 spline_points[:, index_regular_frames], 
                 q[:, index_regular_frames],
                 r[:, index_regular_frames], 
@@ -443,22 +448,30 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
         # end
     end
 
-    i_a = -1
-    i_b = -1
+
+    # add start and end vertices
     for i=axes(spline_points, 2)
         if(config.filter==Filter.NONE || remaining_indices[i]!=-1)
-            i_a = i
+            
+            spline_mesh.vertices[:, end-1] = spline_points[:,i]
+            spline_mesh.normals[:, end-1] = -q[:, i]
+            spline_mesh.colors[end-1] = spline_mesh.colors[1]
             break
         end
     end
     for i=reverse(axes(spline_points, 2))
         if(config.filter==Filter.NONE || remaining_indices[i]!=-1)
-            i_b = i
+            spline_mesh.vertices[:, end] = spline_points[:,i]
+            spline_mesh.normals[:, end] = q[:, i]
+            spline_mesh.colors[end] = spline_mesh.colors[end-2]
             break
         end
     end
 
-    spline_mesh = connect_circles_to_tube(circles, @views ((spline_points[:, i_a], -q[:, i_a]), (spline_points[:, i_b], q[:, i_b])))
+
+    add_faces_to_tube_mesh!(spline_mesh, config.resolution, remaining_count+num_inserted_frames)
+
+
     log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
     # ----- debug export -----

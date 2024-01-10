@@ -32,11 +32,19 @@
             BackboneConfig(Float32(0.2), 12, BackboneType.BACKBONE, Color.UNIFORM, Spline.CUBIC_B, ControlPoints.MID_POINTS, Frame.RMF, Filter.ANGLE),
             BackboneConfig(Float32(0.2), 12, BackboneType.BACKBONE, Color.UNIFORM, Spline.CUBIC_B, ControlPoints.MID_POINTS, Frame.SECOND_SPLINE, Filter.ANGLE)
     ]
-    prepare_backbone_model(pdb, configs[1])
+
+    # test that the method is executed completely and deliviers a non-empty mesh
+    for (i, config) in enumerate(configs)
+        println("Config $i: $config")
+        mesh = prepare_backbone_model(pdb, config)
+        @test size(mesh.vertices, 2)>0 && size(mesh.vertices)==size(mesh.normals) && size(mesh.vertices, 2)==length(mesh.colors)
+    end
+
+    # test that no configuration takes too long (>1 sec)
     for (i, config) in enumerate(configs)
         println("Config $i: $config")
         stats = @timed prepare_backbone_model(pdb, config)
         println("$(stats.time)")
-        @test stats.time<2
+        @test stats.time<1
     end
 end

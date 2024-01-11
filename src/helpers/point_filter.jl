@@ -10,9 +10,7 @@ Whenever the angle between the last selected and the current tangent is too larg
 function filter_points_threshold(q::Matrix{T}, r::Matrix{T}, fixed_indices::AbstractVector{Int}; with_color::Bool=false) where T
 
     target_indices = fill(-1, size(q, 2))
-    if(!issorted(fixed_indices))
-        sort!(fixed_indices)
-    end
+    sort!(fixed_indices)
 
     degree_threshold = 5
     radian_threshold = degree_threshold/360*2*π 

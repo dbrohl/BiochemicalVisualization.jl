@@ -14,16 +14,13 @@ local_y and local_z are expected to have a length of 1.
 
 See also [`create_ellipse_in_local_frame`](@ref), [`create_rectangle_in_local_frame`](@ref).
 """
-function create_circle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T
-    points = Matrix{T}(undef, 3, resolution)
-    normals = Matrix{T}(undef, 3, resolution)
+function create_circle_in_local_frame!(points::AbstractArray{T}, normals::AbstractArray{T}, center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, radius) where T
 
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
         @. normals[:, i] = radius*cos(α)*local_y + radius*sin(α)*local_z
         normals[:, i] ./= norm(@view normals[:, i])
     end
-    return points, normals
 end
 
 """
@@ -34,16 +31,13 @@ local_y and local_z are expected to have a length of 1.
 
 See also [`create_circle_in_local_frame`](@ref), [`create_rectangle_in_local_frame`](@ref).
 """
-function create_ellipse_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
-    points = Matrix{T}(undef, 3, resolution)
-    normals = Matrix{T}(undef, 3, resolution)
+function create_ellipse_in_local_frame!(points::AbstractArray{T}, normals::AbstractArray{T}, center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
 
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
         @. normals[:, i] = half_width*cos(α)*local_y + half_height*sin(α)*local_z
         normals[:, i] ./= norm(@view normals[:, i])
     end
-    return points, normals
 end
 
 """
@@ -53,13 +47,10 @@ local_y and local_z are expected to have a length of 1.
 
 See also [`create_circle_in_local_frame`](@ref), [`create_ellipse_in_local_frame`](@ref).
 """
-function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
+function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::AbstractArray{T}, center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     if(resolution<4)
-        return create_ellipse_in_local_frame(center, local_y, local_z, resolution, width, height)
+        create_ellipse_in_local_frame(points, normals, center, local_y, local_z, resolution, width, height)
     end
-
-    points = Matrix{T}(undef, 3, resolution)
-    normals = Matrix{T}(undef, 3, resolution)
 
     # each corner has a point
     # the remaining points are split into sections A to E
@@ -119,7 +110,6 @@ function create_rectangle_in_local_frame(center::AbstractArray{T}, local_y::Abst
         normals[:, a] .= local_y
         a+=1
     end
-    return points, normals
 end
 
 "Creates a ColoredMesh representing a red, green and blue coordinate system. "

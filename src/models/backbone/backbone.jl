@@ -6,22 +6,20 @@ function benchmark_method(ac::System{T}, config::BackboneConfig) where T
     return representation
 end
 
+"""
+Inserts elem into array. Assuming that array is sorted ascending, it will be still sorted after the insertion. 
+"""
 function insert_sorted!(array, elem)
     index = searchsortedfirst(array, elem)
     insert!(array, index, elem)
 end
 
-
-#assumes sorted index_array!
-function adjust_indices!(index_array, threshold)
-    for i=eachindex(index_array)
-        if(index_array[i]>=threshold)
-            index_array[i] += 1
-        end
-    end
-end
-
-function get_ss_count(sample_indices, spline)
+"""
+Loops over a the list sample_indices and counts observed secondary structures. 
+- sample_indices contains keys for the residue_info_dict. 
+- residue_info_dict contains tuple-values where the second element is the secondary structure
+"""
+function get_ss_count(sample_indices, residue_info_dict)
     ss_count = Dict{BiochemicalAlgorithms.SecondaryStructure.T, Int}(
         BiochemicalAlgorithms.SecondaryStructure.NONE => 0, 
         BiochemicalAlgorithms.SecondaryStructure.HELIX => 0, 
@@ -30,7 +28,7 @@ function get_ss_count(sample_indices, spline)
 
     prev_ss = nothing
     for index in sample_indices
-        curr_ss = spline.residue_info_dict[index][2]
+        curr_ss = residue_info_dict[index][2]
         if(prev_ss!=curr_ss)
             ss_count[curr_ss]+=1
             prev_ss = curr_ss
@@ -39,6 +37,9 @@ function get_ss_count(sample_indices, spline)
     return ss_count
 end
 
+"""
+Finds amino acids that are the end of a beta sheet and should be displayed as an arrowhead.
+"""
 function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_residue_indices, residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}) where T
     rectangle_widths::Vector{T} = []
     arrow_starts::Vector{Int} = []
@@ -63,7 +64,7 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
     arrow_fragment_indices = []
 
 
-    fragment_idx_list_from_frames = unique(sample_to_residue_indices) # TODO wo noch? laufzeit?
+    fragment_idx_list_from_frames = unique(sample_to_residue_indices)
     for current_fragment_idx in fragment_idx_list_from_frames
         current_ss = residue_info_dict[current_fragment_idx][2]
 
@@ -129,6 +130,23 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
     return rectangle_widths, arrow_starts, arrow_frame_indices, n_to_c
 end
 
+"""
+Creates a single circle/ellipse/rectangle and writes the result into result_mesh. 
+
+# Arguments
+- `result_mesh::PlainMesh{T}`: A preallocated struct that will contain the result. 
+- `result_mesh_index::Int`: The created frame is the result_mesh_index-th frame along the spline. This parameter determines where in result_mesh's arrays, data is inserted. 
+- `point::AbstractVector{T}`: The position of the frame
+- `tangent::AbstractVector{T`
+- `normal::AbstractVector{T}`
+- `binormal::AbstractVector{T}`
+- `residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}`: Maps indices of residues to tuples (3 letter amino acid name, secondary structure)
+- `linked_residue_idx::Union{Nothing,Int}`: used to look up the resiude/secondary structure in residue_info_dict
+- `frame_config::Union{Nothing,Tuple{Bool, Bool, Int, Int}}`: If the point is a spline_point, frame_config is nothing. If the point is a transition_point, it has both properties from the previous and the following point. These are stored as (XXXX)
+- `rectangle_width::T`: Normally 1.0, except for frames that are part of an arrow head
+- `fixed_color::Union{NTuple{3, Int}, Nothing}`: contains the fixed color if there is one (e. g. fixed color for the whole chain), otherwise nothing
+- `config::BackboneConfig{T}`
+"""
 function generate_geometry_at_point!(
     result_mesh::PlainMesh{T},
     result_mesh_index::Int, 
@@ -143,16 +161,18 @@ function generate_geometry_at_point!(
     fixed_color::Union{NTuple{3, Int}, Nothing}, 
     config::BackboneConfig{T}) where T
     # generate cross-section vertices
+    start_index = (result_mesh_index-1)*config.resolution+1
+    end_index = result_mesh_index*config.resolution
     if(config.backbone_type==BackboneType.BACKBONE)
-        circle_points, normals = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
+        create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, config.stick_radius)
     elseif(config.backbone_type==BackboneType.RIBBON)
-        circle_points, normals = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
+        create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
     elseif(config.backbone_type==BackboneType.CARTOON)
         shortcut = false
         if(linked_residue_idx===nothing)
             if((frame_config[1] == frame_config[2]))
-                circle_points = stack(repeat([point], config.resolution)) # only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
-                normals = stack(repeat([tangent], config.resolution))
+                result_mesh.vertices[:, start_index:end_index] = stack(repeat([point], config.resolution)) # only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified
+                result_mesh.normals[:, start_index:end_index] = stack(repeat([tangent], config.resolution))
                 shortcut = true
             else
                 residue_idx = frame_config[3]
@@ -164,16 +184,14 @@ function generate_geometry_at_point!(
         if(!shortcut)
             structure = residue_info_dict[residue_idx][2]
             if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
-                circle_points, normals = create_circle_in_local_frame(point, normal, binormal, config.resolution, config.stick_radius)
+                create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, config.stick_radius)
             elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
-                circle_points, normals = create_ellipse_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
+                create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
             elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-                circle_points, normals = create_rectangle_in_local_frame(point, normal, binormal, config.resolution, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
+                create_rectangle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
             end
         end
-    end 
-    result_mesh.vertices[:, (result_mesh_index-1)*config.resolution+1:result_mesh_index*config.resolution] = circle_points
-    result_mesh.normals[:, (result_mesh_index-1)*config.resolution+1:result_mesh_index*config.resolution] = normals
+    end
 
     # color
     color = nothing
@@ -195,12 +213,15 @@ function generate_geometry_at_point!(
         end
         color = AA_COLORS[residue_info_dict[residue_idx][1]]
     end
-    for i=(result_mesh_index-1)*config.resolution+1:result_mesh_index*config.resolution
+    for i=start_index:end_index
         result_mesh.colors[i] = color
     end
 end
 
-# assumes checked config (consistent and adjusted to T)
+"""
+Generates a PlainMesh for chain. The config should be checked previously. 
+When the whole mesh should have a uniform color, it can be passed as fixed_color. 
+"""
 function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
     if(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
         fixed_color = (0, 0, 255)
@@ -230,30 +251,33 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     elseif(config.frame==Frame.SECOND_SPLINE)
         second_spline_points = calculate_minor_points(spline, vertices_per_unit)
         q, r, s = frames_from_two_splines(spline_points, velocities, second_spline_points)
-
-
     end
 
 
-    ss_count = get_ss_count(sample_to_residue_indices, spline)
-    num_inserted_frames = 0
+    # when secondary structure is displayed, additional points are necessary
+    ss_count = get_ss_count(sample_to_residue_indices, spline.residue_info_dict)
+    num_transition_points = 0
     if(config.backbone_type==BackboneType.CARTOON)
-        num_inserted_frames += 2*(ss_count[BiochemicalAlgorithms.SecondaryStructure.NONE]+ss_count[BiochemicalAlgorithms.SecondaryStructure.HELIX]+ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET]-1) # changes in secondary structure
-        num_inserted_frames += ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET] # start of arrow heads
+        num_transition_points += 2*(ss_count[BiochemicalAlgorithms.SecondaryStructure.NONE]+ss_count[BiochemicalAlgorithms.SecondaryStructure.HELIX]+ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET]-1) # changes in secondary structure
+        num_transition_points += ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET] # start of arrow heads
     end
-    inserted_frames = Vector{Tuple{Vector{T}, Vector{T}, Vector{T}, Vector{T}, T, Union{Int, Nothing}, Union{Nothing, Tuple{Bool, Bool, Int, Int}}}}(undef, num_inserted_frames)
-    inserted_index_mappings = Vector{Int}(undef, num_inserted_frames)
 
-    fixed_indices::Vector{Int} = [] # collection of all frames that should not be removed by filtering 
+    # The additional points will not be inserted into spline_points because of efficient memory allocation. 
+    # Instead we store them (with related additional data) in a separate vector
+    # The tuples contain (position, q, r, s, rectangle_width, residue_index, (is_small_to_large_transition, first_transition_part, residue_for_structure, residue_for_color))
+    transition_data = Vector{Tuple{Vector{T}, Vector{T}, Vector{T}, Vector{T}, T, Union{Int, Nothing}, Union{Nothing, Tuple{Bool, Bool, Int, Int}}}}(undef, num_transition_points)
+    # we store before which points of spline_points each transition_point should be inserted. 
+    # the array will be sorted in ascending order to "merge" it with spline_points easier
+    transition_insertion_indices = Vector{Int}(undef, num_transition_points)
 
-    arrow_insert_indices = collect(1:ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET]) # stores indices that are left out for arrow frames later
+    fixed_indices::Vector{Int} = [] # collection of all spline_points that should not be removed by filtering 
+
+    arrow_insert_indices = collect(1:ss_count[BiochemicalAlgorithms.SecondaryStructure.SHEET]) # stores indices that are left out for arrow transition points later
     # add frames when secondary structure changes and at arrow head starts
     if(config.backbone_type==BackboneType.CARTOON)
         # arrows part 1
-        rectangle_widths, arrow_starts, arrow_frame_indices, n_to_c = compute_frame_widths(fragment_list, sample_to_residue_indices, spline.residue_info_dict)
-        append!(fixed_indices, arrow_frame_indices) # the arrow part with changing frame widths should not be discarded by filter methods
-        sort!(fixed_indices)
-
+        rectangle_widths, arrow_starts, arrow_point_indices, n_to_c = compute_frame_widths(fragment_list, sample_to_residue_indices, spline.residue_info_dict)
+        append!(fixed_indices, arrow_point_indices) # the arrow part with changing frame widths should not be discarded by filter methods
 
         # ss changes
         prev_res_idx = sample_to_residue_indices[1]
@@ -262,7 +286,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
         if spline.residue_info_dict[prev_res_idx][2]==BiochemicalAlgorithms.SecondaryStructure.SHEET # detect sheets at the beginning
             arrow_insert_indices[a] = b
-            log_info(extra_frames, "skipping index $b for arrow frames")
             a+=1
             b+=1
         end
@@ -278,31 +301,26 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
                 small_to_large = ((n_to_c && (prev_ss==BiochemicalAlgorithms.SecondaryStructure.NONE || prev_ss==BiochemicalAlgorithms.SecondaryStructure.SHEET)) || (!n_to_c && curr_ss==BiochemicalAlgorithms.SecondaryStructure.HELIX))
                 if(small_to_large)
                     insertion_idx = i-1
-                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, true, prev_res_idx, res_idx))
-                    inserted_index_mappings[b] = insertion_idx+1
-                    log_info(extra_frames, "inserting A at $b")
+                    transition_data[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, true, prev_res_idx, res_idx))
+                    transition_insertion_indices[b] = insertion_idx+1
                     b+=1
-                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, false, res_idx, res_idx))
-                    inserted_index_mappings[b] = insertion_idx+1
-                    log_info(extra_frames, "inserting A at $b")
+                    transition_data[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, false, res_idx, res_idx))
+                    transition_insertion_indices[b] = insertion_idx+1
                     b+=1
                     
                 else
                     insertion_idx = i
-                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, true, prev_res_idx, prev_res_idx))
-                    inserted_index_mappings[b] = insertion_idx
-                    log_info(extra_frames, "inserting B at $b")
+                    transition_data[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing, (small_to_large, true, prev_res_idx, prev_res_idx))
+                    transition_insertion_indices[b] = insertion_idx
                     b+=1
-                    inserted_frames[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing,  (small_to_large, false, res_idx, prev_res_idx))
-                    inserted_index_mappings[b] = insertion_idx+1
-                    log_info(extra_frames, "inserting B at $b")
+                    transition_data[b] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], rectangle_widths[insertion_idx], nothing,  (small_to_large, false, res_idx, prev_res_idx))
+                    transition_insertion_indices[b] = insertion_idx+1
                     b+=1                   
                 end
-                insert_sorted!(fixed_indices, insertion_idx)
+                push!(fixed_indices, insertion_idx)
 
                 if(curr_ss == BiochemicalAlgorithms.SecondaryStructure.SHEET) # skip array elements for arrow frames
                     arrow_insert_indices[a] = b
-                    log_info(extra_frames, "skipping index $b for arrow frames")
                     a+=1
                     b+=1
                 end
@@ -312,13 +330,12 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
         end
 
 
-        # arrows part 2
+        # arrows part 2 (add transition_point at the begin of the arrow head)
         a = 1
-        for i=eachindex(arrow_starts) # add frame at the begin of the arrow head
+        for i=eachindex(arrow_starts)
             insertion_idx = arrow_starts[i]
-            inserted_frames[arrow_insert_indices[a]] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], T(1.0), sample_to_residue_indices[insertion_idx], nothing)
-            inserted_index_mappings[arrow_insert_indices[a]] = insertion_idx+(n_to_c ? 0 : 1)
-            log_info(extra_frames, "inserting at $(arrow_insert_indices[a])")
+            transition_data[arrow_insert_indices[a]] = (spline_points[:, insertion_idx], q[:, insertion_idx], r[:, insertion_idx], s[:, insertion_idx], T(1.0), sample_to_residue_indices[insertion_idx], nothing)
+            transition_insertion_indices[arrow_insert_indices[a]] = insertion_idx+(n_to_c ? 0 : 1)
             a += 1
         end
 
@@ -327,11 +344,10 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
 
 
-    # filter
+    # filter to decrease the amount of geometry to generate
     if(config.filter==Filter.ANGLE)
         # create a list of points that are fixed and cannot be removed by the filter
-        insert!(fixed_indices, 1, 1) # begin and end cannot be dropped
-        push!(fixed_indices, size(spline_points, 2))
+        push!(fixed_indices, 1, size(spline_points, 2)) # begin and end cannot be dropped
 
         if(config.color==Color.SECONDARY_STRUCTURE && config.backbone_type!=BackboneType.CARTOON)
             prev_res_idx = sample_to_residue_indices[1]
@@ -373,39 +389,32 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
     log_info(types, "Type of spline points: ", typeof(spline_points))
 
-    log_info(extra_frames, "inserted_index_mappings", inserted_index_mappings)
-    log_info(extra_frames, "remaining_indices", remaining_indices)
-
-
-    num_vertices = (remaining_count+num_inserted_frames)*config.resolution + 2 # end "caps"
-    num_faces = (remaining_count+num_inserted_frames-1)*config.resolution*2 + 2*config.resolution # connections between neighbor circles + connections to the end points
+    num_vertices = (remaining_count+num_transition_points)*config.resolution + 2 # end "caps"
+    num_faces = (remaining_count+num_transition_points-1)*config.resolution*2 + 2*config.resolution # connections between neighbor circles + connections to the end points
     spline_mesh = PlainMesh(Array{T}(undef, 3, num_vertices), Array{T}(undef, 3, num_vertices), Array{Int}(undef, 3, num_faces), Vector{NTuple{3, Int}}(undef, num_vertices))
     # iterate and create vertices
     index_regular_frames = 1
     index_inserted_frames = 1
     i = 1 # currently highest index of index_regular_frames and the values of index_inserted_frames
     j = 1 # count of inserted frames (including the current one)
-    @time while index_inserted_frames<=num_inserted_frames || index_regular_frames<=length(remaining_indices)
-        log_info(extra_frames, "i=$i, j=$j, index_regular_frames=$index_regular_frames, index_inserted_frames=$index_inserted_frames")
-
+    while index_inserted_frames<=num_transition_points || index_regular_frames<=length(remaining_indices)
         if(config.color==Color.RAINBOW)
-            fixed_color = rainbow(j/(remaining_count+num_inserted_frames))
+            fixed_color = rainbow(j/(remaining_count+num_transition_points))
         end
 
-        if index_inserted_frames<=num_inserted_frames && inserted_index_mappings[index_inserted_frames] == i
+        if index_inserted_frames<=num_transition_points && transition_insertion_indices[index_inserted_frames] == i
             # insert this first
-            log_info(extra_frames, "inserted frame")
             
-            # TODO iterativ statt als bulk # TODO resolution und filter koppeln
+            # TODO resolution und filter koppeln
             @views generate_geometry_at_point!(spline_mesh, j,
-                inserted_frames[index_inserted_frames][1],
-                inserted_frames[index_inserted_frames][2],
-                inserted_frames[index_inserted_frames][3],
-                inserted_frames[index_inserted_frames][4], 
+                transition_data[index_inserted_frames][1],
+                transition_data[index_inserted_frames][2],
+                transition_data[index_inserted_frames][3],
+                transition_data[index_inserted_frames][4], 
                 spline.residue_info_dict,
-                inserted_frames[index_inserted_frames][6],
-                inserted_frames[index_inserted_frames][7],
-                inserted_frames[index_inserted_frames][5],
+                transition_data[index_inserted_frames][6],
+                transition_data[index_inserted_frames][7],
+                transition_data[index_inserted_frames][5],
                 fixed_color,
                 config)
 
@@ -416,9 +425,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
         if (config.filter==Filter.NONE || (config.filter==Filter.ANGLE && remaining_indices[index_regular_frames]!=-1))
             # insert regular frame
-            log_info(extra_frames, "regular frame")
 
-            # TODO iterativ statt als bulk # TODO resolution und filter koppeln
+            # TODO resolution und filter koppeln
             @views generate_geometry_at_point!(spline_mesh, j,
                 spline_points[:, index_regular_frames], 
                 q[:, index_regular_frames],
@@ -469,7 +477,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     end
 
 
-    add_faces_to_tube_mesh!(spline_mesh, config.resolution, remaining_count+num_inserted_frames)
+    add_faces_to_tube_mesh!(spline_mesh, config.resolution, remaining_count+num_transition_points)
 
 
     log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
@@ -488,6 +496,9 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     return spline_mesh
 end
 
+"""
+Generates a PlainMesh for a system. 
+"""
 function prepare_backbone_model(
     ac::System{T}, config::BackboneConfig{T}) where {T<:Real}
 

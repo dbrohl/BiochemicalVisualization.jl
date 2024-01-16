@@ -389,66 +389,79 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
     log_info(types, "Type of spline points: ", typeof(spline_points))
 
+
+    # allocate memory
     num_vertices = (remaining_count+num_transition_points)*config.resolution + 2 # end "caps"
     num_faces = (remaining_count+num_transition_points-1)*config.resolution*2 + 2*config.resolution # connections between neighbor circles + connections to the end points
     spline_mesh = PlainMesh(Array{T}(undef, 3, num_vertices), Array{T}(undef, 3, num_vertices), Array{Int}(undef, 3, num_faces), Vector{NTuple{3, Int}}(undef, num_vertices))
-    # iterate and create vertices
-    index_regular_frames = 1
-    index_inserted_frames = 1
-    i = 1 # currently highest index of index_regular_frames and the values of index_inserted_frames
-    j = 1 # count of inserted frames (including the current one)
-    while index_inserted_frames<=num_transition_points || index_regular_frames<=length(remaining_indices)
-        if(config.color==Color.RAINBOW)
-            fixed_color = rainbow(j/(remaining_count+num_transition_points))
-        end
 
-        if index_inserted_frames<=num_transition_points && transition_insertion_indices[index_inserted_frames] == i
-            # insert this first
-            
-            # TODO resolution und filter koppeln
-            @views generate_geometry_at_point!(spline_mesh, j,
-                transition_data[index_inserted_frames][1],
-                transition_data[index_inserted_frames][2],
-                transition_data[index_inserted_frames][3],
-                transition_data[index_inserted_frames][4], 
-                spline.residue_info_dict,
-                transition_data[index_inserted_frames][6],
-                transition_data[index_inserted_frames][7],
-                transition_data[index_inserted_frames][5],
-                fixed_color,
-                config)
+    # weave spline_points and transition_points together
+    picker = Array{Int}(undef, 2, remaining_count+num_transition_points)
 
-            index_inserted_frames+=1
+    index_spline_points = 1
+    index_transition_points = 1
+    i = 1 # currently highest index of index_spline_points and the values of index_transition_points
+    j = 1 # running variable
+    while index_transition_points<=num_transition_points || index_spline_points<=length(remaining_indices)
+        if index_transition_points<=num_transition_points && transition_insertion_indices[index_transition_points] == i
+            picker[1, j] = 1
+            picker[2, j] = index_transition_points
+
+            index_transition_points+=1
             j += 1
             continue
         end
 
-        if (config.filter==Filter.NONE || (config.filter==Filter.ANGLE && remaining_indices[index_regular_frames]!=-1))
-            # insert regular frame
 
-            # TODO resolution und filter koppeln
-            @views generate_geometry_at_point!(spline_mesh, j,
-                spline_points[:, index_regular_frames], 
-                q[:, index_regular_frames],
-                r[:, index_regular_frames], 
-                s[:, index_regular_frames], 
-                spline.residue_info_dict,
-                sample_to_residue_indices[index_regular_frames],
-                nothing,
-                config.backbone_type==BackboneType.CARTOON ? rectangle_widths[index_regular_frames] : T(1.0),
-                fixed_color,
-                config)
+        if (config.filter==Filter.NONE || (config.filter==Filter.ANGLE && remaining_indices[index_spline_points]!=-1))
+            picker[1, j] = 0
+            picker[2, j] = index_spline_points
 
-
-            index_regular_frames += 1
+            index_spline_points += 1
             i += 1
             j += 1
             continue
         end
 
-        index_regular_frames += 1
+        index_spline_points += 1
         i+=1
+    end
 
+    # iterate and create vertices
+    #Threads.@threads 
+    for j=1:remaining_count+num_transition_points
+        #println(Threads.threadid())
+        if(config.color==Color.RAINBOW)
+            fixed_color = rainbow(j/(remaining_count+num_transition_points))
+        end
+
+        if picker[1, j]==0
+            # TODO resolution und filter koppeln
+            @views generate_geometry_at_point!(spline_mesh, j,
+            spline_points[:, picker[2, j]], 
+            q[:, picker[2, j]],
+            r[:, picker[2, j]], 
+            s[:, picker[2, j]], 
+            spline.residue_info_dict,
+            sample_to_residue_indices[picker[2, j]],
+            nothing,
+            config.backbone_type==BackboneType.CARTOON ? rectangle_widths[picker[2, j]] : T(1.0),
+            fixed_color,
+            config)
+        else
+            # TODO resolution und filter koppeln
+            @views generate_geometry_at_point!(spline_mesh, j,
+            transition_data[picker[2, j]][1],
+            transition_data[picker[2, j]][2],
+            transition_data[picker[2, j]][3],
+            transition_data[picker[2, j]][4], 
+            spline.residue_info_dict,
+            transition_data[picker[2, j]][6],
+            transition_data[picker[2, j]][7],
+            transition_data[picker[2, j]][5],
+            fixed_color,
+            config)
+        end
 
         # # sanity check: frame should be orthogonal
         # @views if(!approx_zero(dot(q[:, current_index], r[:, current_index])) || !approx_zero(dot(q[:, current_index], s[:, current_index])) || !approx_zero(dot(s[:, current_index], r[:, current_index])))

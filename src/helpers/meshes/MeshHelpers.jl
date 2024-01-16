@@ -171,9 +171,11 @@ function add_faces_to_tube_mesh!(tube_mesh::PlainMesh{T}, resolution::Int, ncirc
     offset = 0
     connection_i = 1
     prev_indices = nothing
+    # @Threads.threads 
     for index = 1:ncircles
 
         # add connections between circles
+        prev_indices = (offset+1):(offset+resolution)
         current_indices = (offset+1):(offset+resolution)
         if(prev_indices !== nothing)
             @assert length(current_indices)==length(prev_indices)

@@ -66,3 +66,20 @@ end
 function approx_zero(value)
     return abs(value)< 10^-5
 end
+
+function isless_tolerance(a, b, tol=10^-4)
+    return (a-b) <= -tol
+end
+
+function isgreater_tolerance(a, b, tol=10^-4)
+    return (a-b) >= tol
+end
+
+function isgreaterorequals_tolerance(a, b)
+    return (a-b) > -tol
+end
+
+function iszero_tolerance(a, tol=10^-4)
+    return abs(a) < tol
+end
+

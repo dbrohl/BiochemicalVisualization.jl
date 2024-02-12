@@ -11,6 +11,8 @@ mutable struct HashGrid{T, U}
     origin::Vector{T}
     box_size::Vector{T}
 
+    max_distance::T
+
     function HashGrid{T, U}(bounding_box::Matrix{T}, box_size::Vector{T}, position_access_function, estimated_n_entries=0) where {T, U}
         if size(bounding_box)!=(3, 2)
             throw(ArgumentError("The bounding box should be a 3x2 matrix with the minimal values in the first and the maximal values in the second column. "))
@@ -37,7 +39,7 @@ mutable struct HashGrid{T, U}
         for i=eachindex(grid)
             grid[i] = Vector{Int}()
         end
-        new{T, U}(data, grid, position_access_function, bounding_box[:, 1], box_size)
+        new{T, U}(data, grid, position_access_function, bounding_box[:, 1], box_size, min(box_size...))
     end
 end
 
@@ -125,7 +127,7 @@ function iterate(item::HashGridIterationHelper, (i, j, k, local_next_index))
             return Base.iterate(item, (i, j, k, local_next_index))
         else
             log_info(hash_grid, "found point", value)
-            return value, (i, j, k, local_next_index)
+            return (value, dist), (i, j, k, local_next_index)
         end
     end
 end
@@ -153,8 +155,15 @@ function Base.isdone(item::HashGridIterationHelper, (i, j, k, local_next_index))
     end
 end
 
+"""
+Can be iterated over and delivers tuples (entry::U, distance) for each entry of grid that is at most max_distance from world_coordinates. 
 
-function each_neighbor(grid::HashGrid{T, U}, world_coordinates::AbstractVector{T}, max_distance::T) where {T, U}# TODO exclude self
+(When an item is exactly at world_coordinates, it is included as well and has distance==0)
+"""
+function each_neighbor(grid::HashGrid{T, U}, world_coordinates::AbstractVector{T}, max_distance::Union{T, nothing} = nothing) where {T, U}
+    if max_distance===nothing
+        max_distance = grid.max_distance
+    end
     return HashGridIterationHelper{T,U}(grid, world_coordinates, max_distance)
 end
 

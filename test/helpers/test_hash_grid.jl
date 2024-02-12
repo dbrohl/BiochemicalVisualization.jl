@@ -42,7 +42,7 @@
 
     # test data access
     #result = Set()
-    result = collect(each_neighbor(grid, [-2.0, -4, -6], 1.0))
+    result = collect(map((item, dist) -> item, each_neighbor(grid, [-2.0, -4, -6], 1.0)))
     @test result == [[-2.0, -4, -6], [-1.5, -4, -6],[-1.0, -4, -6]]
 
     # more test data (compare results of grid with result of brute force)
@@ -67,12 +67,12 @@
     end
 
     result_one = Set()
-    temp = collect(each_neighbor(grid, reference_point, 1.0))
+    temp = collect(map((item, dist)->item, each_neighbor(grid, reference_point, 1.0)))
     if(length(temp)>0)
         push!(result_one, temp...)
     end
     result_zero_five = Set()
-    temp = collect(each_neighbor(grid, reference_point, 0.5))
+    temp = collect(map((item, dist)->item, each_neighbor(grid, reference_point, 0.5)))
     if(length(temp)>0)
         push!(result_zero_five, temp...)
     end
@@ -89,8 +89,8 @@
     c1 = Container([-2.0, -4, -6])
     c2 = Container([1.5, 0.1, 1.4])
     push!(grid, c1, c2)
-    @test [c1]==collect(each_neighbor(grid, [-2.0, -4, -6], 1.0))
-    @test [c2]==collect(each_neighbor(grid, [1.5, 0.1, 1.4], 1.0))
+    @test [c1]==collect(map((item, dist)->item, each_neighbor(grid, [-2.0, -4, -6], 1.0)))
+    @test [c2]==collect(map((item, dist)->item, each_neighbor(grid, [1.5, 0.1, 1.4], 1.0)))
 
     # test edge cases
     # one dimension has 0 width and box_size larger than width (should still work)

@@ -119,7 +119,7 @@ function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool)
     return main_points, minor_points, point_to_residue_indices, residue_info_dict
 end
 
-function calculate_resolution_dependent_data(spline, resolution)
+function calculate_resolution_dependent_data(spline::Union{CatmullRom, CubicB}, resolution)
     num_points::Vector{Int} = []
     sample_mapping::Vector{Int} = []
     i = 1

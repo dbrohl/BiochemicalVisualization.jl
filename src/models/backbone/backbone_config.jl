@@ -16,6 +16,7 @@ end
     ELEMENT
 end # TODO charge? hydrophobicity?
 @enumx Spline begin
+    LINEAR
     CATMULL_ROM
     CUBIC_B
 end # TODO more options

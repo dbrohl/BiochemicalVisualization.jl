@@ -235,6 +235,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
         spline = CatmullRom(chain, config.control_point_strategy)
     elseif(config.spline==Spline.CUBIC_B)
         spline = CubicB(chain, config.control_point_strategy)
+    elseif(config.spline==Spline.LINEAR)
+        spline = Linear(chain, config.control_point_strategy)
     end
 
     vertices_per_unit = T(0.4 * config.resolution / (2*π*config.stick_radius))
@@ -383,8 +385,10 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
             end
         end
 
-        local remaining_indices::Vector{Int}
         remaining_indices, remaining_count = filter_points_threshold(q, r, fixed_indices, with_color=(config.color==Color.RAINBOW))
+    else
+        remaining_indices = 1:size(q, 2)
+        remaining_count = size(q, 2)
     end
 
     log_info(types, "Type of spline points: ", typeof(spline_points))
@@ -428,9 +432,8 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     end
 
     # iterate and create vertices
-    #Threads.@threads 
-    for j=1:remaining_count+num_transition_points
-        #println(Threads.threadid())
+    #
+    Threads.@threads for j=1:remaining_count+num_transition_points
         if(config.color==Color.RAINBOW)
             fixed_color = rainbow(j/(remaining_count+num_transition_points))
         end

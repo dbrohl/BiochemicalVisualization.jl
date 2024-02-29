@@ -48,9 +48,11 @@ include("models/ball_and_stick.jl")
 include("models/stick.jl")
 include("models/van_der_waals.jl")
 
-include("splines/SplineHelper.jl")
+
 include("splines/CatmullRom.jl")
 include("splines/CubicB.jl")
+include("splines/Linear.jl")
+include("splines/SplineHelper.jl")
 
 
 include("core/visualize.jl")

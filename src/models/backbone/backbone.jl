@@ -434,36 +434,40 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     # iterate and create vertices
     #
     Threads.@threads for j=1:remaining_count+num_transition_points
+        local color_in_thread
         if(config.color==Color.RAINBOW)
-            fixed_color = rainbow(j/(remaining_count+num_transition_points))
+            println("Color: ", j/(remaining_count+num_transition_points))
+            color_in_thread = rainbow(j/(remaining_count+num_transition_points))
+        else
+            color_in_thread = fixed_color
         end
 
         if picker[1, j]==0
             # TODO resolution und filter koppeln
             @views generate_geometry_at_point!(spline_mesh, j,
-            spline_points[:, picker[2, j]], 
-            q[:, picker[2, j]],
-            r[:, picker[2, j]], 
-            s[:, picker[2, j]], 
-            spline.residue_info_dict,
-            sample_to_residue_indices[picker[2, j]],
-            nothing,
-            config.backbone_type==BackboneType.CARTOON ? rectangle_widths[picker[2, j]] : T(1.0),
-            fixed_color,
-            config)
+                spline_points[:, picker[2, j]], 
+                q[:, picker[2, j]],
+                r[:, picker[2, j]], 
+                s[:, picker[2, j]], 
+                spline.residue_info_dict,
+                sample_to_residue_indices[picker[2, j]],
+                nothing,
+                config.backbone_type==BackboneType.CARTOON ? rectangle_widths[picker[2, j]] : T(1.0),
+                color_in_thread,
+                config)
         else
             # TODO resolution und filter koppeln
             @views generate_geometry_at_point!(spline_mesh, j,
-            transition_data[picker[2, j]][1],
-            transition_data[picker[2, j]][2],
-            transition_data[picker[2, j]][3],
-            transition_data[picker[2, j]][4], 
-            spline.residue_info_dict,
-            transition_data[picker[2, j]][6],
-            transition_data[picker[2, j]][7],
-            transition_data[picker[2, j]][5],
-            fixed_color,
-            config)
+                transition_data[picker[2, j]][1],
+                transition_data[picker[2, j]][2],
+                transition_data[picker[2, j]][3],
+                transition_data[picker[2, j]][4], 
+                spline.residue_info_dict,
+                transition_data[picker[2, j]][6],
+                transition_data[picker[2, j]][7],
+                transition_data[picker[2, j]][5],
+                color_in_thread,
+                config)
         end
 
         # # sanity check: frame should be orthogonal

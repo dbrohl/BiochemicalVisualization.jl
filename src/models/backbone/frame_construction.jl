@@ -13,7 +13,7 @@ function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
         if(approx_zero(norm(ts[:, i])))
             log_warning("zero length tangent in rmf (index $i/$(size(ts, 2))): $(ts[:, i])")
         end
-        normalize!(ts[:, i])
+        normalize_col!(ts, i)
     end
 
     if(approx_zero(ts[2, 1]) && approx_zero(ts[3, 1]))
@@ -21,10 +21,10 @@ function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
     else
         temp = [1; 0; 0]
     end
-    rs[:, 1] = @views cross( ts[:, 1], temp)
-    @views rs[:, 1] ./= norm(rs[:, 1])
+    @views cross!(rs[:,1], ts[:, 1], temp)
+    normalize_col!(rs, 1)
 
-    ss[:, 1] = cross(ts[:, 1], rs[:, 1])
+    @views cross!(ss[:,1], ts[:, 1], rs[:, 1])
 
     v1 = Vector{T}(undef, 3)
     v2 = Vector{T}(undef, 3)
@@ -41,8 +41,8 @@ function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
         if approx_zero(norm(rs[:, i+1]))
             log_warning("zero length r in rmf (index $(i+1)): $(rs[:, i+1])) $(norm(rs[:, i+1]))")
         end
-        rs[:, i+1] ./= norm(rs[:, i+1])
-        ss[:, i+1] = cross(ts[:, i+1], rs[:, i+1])
+        normalize_col!(rs, i+1)
+        @views cross!(ss[:, i+1], ts[:, i+1], rs[:, i+1])
     end
     return ts, rs, ss
 end
@@ -66,12 +66,12 @@ function frames_from_two_splines(major_spline_points::Matrix{T}, major_spline_ta
         # rs vectors are difference between sampled spline point and the outer spline
         rs[:, i] = minor_spline_points[:, i] .- major_spline_points[:, i]
         #project r onto plane that is perpendicular to tangent
-        normalize!(rs[:, i])
+        normalize_col!(rs, i)
         rs[:, i] .-= (dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) .* ts[:, i])
-        normalize!(rs[:, i])
+        normalize_col!(rs, i)
 
         # third axis is perpendicular to the tangent and r
-        cross!(ss[:, i], ts[:, i], rs[:, i]) #alloc why?
+        @views cross!(ss[:,i], ts[:, i], rs[:, i])
     end
     return ts, rs, ss
 end

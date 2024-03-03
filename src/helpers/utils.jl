@@ -66,7 +66,7 @@ end
 """
 Inplace cross()
 """
-function cross!(dest::AbstractVector, a::AbstractVector, b::AbstractVector)
+function cross!(dest::AbstractArray, a::AbstractVector, b::AbstractVector)
     if !(length(a) == length(b) == length(dest) == 3)
         throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
     end

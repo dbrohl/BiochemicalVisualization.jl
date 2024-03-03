@@ -19,7 +19,7 @@ function create_circle_in_local_frame!(points::AbstractArray{T}, normals::Abstra
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
         @. normals[:, i] = radius*cos(α)*local_y + radius*sin(α)*local_z
-        normalize!(normals[:, i])
+        normalize_col!(normals, i)
     end
 end
 
@@ -36,7 +36,7 @@ function create_ellipse_in_local_frame!(points::AbstractArray{T}, normals::Abstr
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
         @. normals[:, i] = half_width*cos(α)*local_y + half_height*sin(α)*local_z
-        normalize!(normals[:, i])
+        normalize_col!(normals, i)
     end
 end
 
@@ -76,7 +76,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center + half_width_vector + half_height_vector
     normals[:, a] .= local_y .+ local_z
-    normalize!(normals[:, a])
+    normalize_col!(normals, a)
     a+=1
     for x in range(1, -1, B+2)[2:end-1]
         @. points[:, a] = center + x*half_width_vector + half_height_vector
@@ -85,7 +85,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center - half_width_vector + half_height_vector
     normals[:, a] .= -local_y .+ local_z
-    normalize!(normals[:, a])
+    normalize_col!(normals, a)
     a+=1
     for y in range(1, -1, C+2)[2:end-1]
         @. points[:, a] = center - half_width_vector + y*half_height_vector
@@ -94,7 +94,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center - half_width_vector - half_height_vector
     normals[:, a] .= -local_y .- local_z
-    normalize!(normals[:, a])
+    normalize_col!(normals, a)
     a+=1
     for x in range(-1, 1, D+2)[2:end-1]
         @. points[:, a] = center + x*half_width_vector - half_height_vector
@@ -103,7 +103,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center + half_width_vector - half_height_vector
     normals[:, a] .= local_y .- local_z
-    normalize!(normals[:, a])
+    normalize_col!(normals, a)
     a+=1
     for y in range(-1, 0, E+2)[2:end-1]
         @. points[:, a] = center + half_width_vector + y*half_height_vector

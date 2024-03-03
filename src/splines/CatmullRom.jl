@@ -107,6 +107,7 @@ function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Ab
     A3v = Vector{T}(undef, 3)
     B1v = Vector{T}(undef, 3)
     B2v = Vector{T}(undef, 3)
+    #TODO StaticArrays?
 
     for (i, t) in enumerate(ts)
         @. A1 = (t1-t)/(t1-t0) * P0 + (t-t0)/(t1-t0) * P1
@@ -129,5 +130,5 @@ function compute_catmull_rom_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Ab
 end
 
 function tRecursion(pCurr::AbstractVector{T}, pPrev::AbstractVector{T}, tPrev::T) where T
-    return norm(pCurr .- pPrev) ^ (T(0.5)) + tPrev
+    return norm(pCurr .- pPrev) ^ T(0.5) + tPrev
 end

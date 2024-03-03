@@ -19,7 +19,7 @@ function create_circle_in_local_frame!(points::AbstractArray{T}, normals::Abstra
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + radius*cos(α)*local_y + radius*sin(α)*local_z
         @. normals[:, i] = radius*cos(α)*local_y + radius*sin(α)*local_z
-        normals[:, i] ./= norm(@view normals[:, i])
+        normalize!(normals[:, i])
     end
 end
 
@@ -36,7 +36,7 @@ function create_ellipse_in_local_frame!(points::AbstractArray{T}, normals::Abstr
     for (i, α) in enumerate(range(0, 2*π, length=resolution+1)[1:end-1]) #alloc
         @. points[:, i] = center + half_width*cos(α)*local_y + half_height*sin(α)*local_z
         @. normals[:, i] = half_width*cos(α)*local_y + half_height*sin(α)*local_z
-        normals[:, i] ./= norm(@view normals[:, i])
+        normalize!(normals[:, i])
     end
 end
 
@@ -76,7 +76,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center + half_width_vector + half_height_vector
     normals[:, a] .= local_y .+ local_z
-    normals[:, a] ./= norm(@view normals[:, a])
+    normalize!(normals[:, a])
     a+=1
     for x in range(1, -1, B+2)[2:end-1]
         @. points[:, a] = center + x*half_width_vector + half_height_vector
@@ -85,7 +85,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center - half_width_vector + half_height_vector
     normals[:, a] .= -local_y .+ local_z
-    normals[:, a] ./= norm(@view normals[:, a])
+    normalize!(normals[:, a])
     a+=1
     for y in range(1, -1, C+2)[2:end-1]
         @. points[:, a] = center - half_width_vector + y*half_height_vector
@@ -94,7 +94,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center - half_width_vector - half_height_vector
     normals[:, a] .= -local_y .- local_z
-    normals[:, a] ./= norm(@view normals[:, a])
+    normalize!(normals[:, a])
     a+=1
     for x in range(-1, 1, D+2)[2:end-1]
         @. points[:, a] = center + x*half_width_vector - half_height_vector
@@ -103,7 +103,7 @@ function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::Abs
     end
     @. points[:, a] = center + half_width_vector - half_height_vector
     normals[:, a] .= local_y .- local_z
-    normals[:, a] ./= norm(@view normals[:, a])
+    normalize!(normals[:, a])
     a+=1
     for y in range(-1, 0, E+2)[2:end-1]
         @. points[:, a] = center + half_width_vector + y*half_height_vector
@@ -168,6 +168,14 @@ Adds faces between circles to create the surface of a tube.
 The last two vertices are assumed to be the start- and end-cap respectively. 
 """
 function add_faces_to_tube_mesh!(tube_mesh::PlainMesh{T}, resolution::Int, ncircles::Int) where {T}
+
+    if ncircles<=0 || size(tube_mesh.vertices, 2)<=0
+        return
+    end
+
+    num_faces = (ncircles-1)*resolution*2 + 2*resolution # connections between neighbor circles + connections to the end points
+    tube_mesh.connections = Matrix{Int}(undef, 3, num_faces)
+
     offset = 0
     connection_i = 1
     prev_indices = nothing
@@ -176,17 +184,20 @@ function add_faces_to_tube_mesh!(tube_mesh::PlainMesh{T}, resolution::Int, ncirc
 
         # add connections between circles
         current_indices = (offset+1):(offset+resolution)
+        shift_buffer = Vector{Int}(undef, resolution)
         if(prev_indices !== nothing)
             @assert length(current_indices)==length(prev_indices)
 
             tube_mesh.connections[1, connection_i:connection_i+resolution-1] = current_indices'
             tube_mesh.connections[2, connection_i:connection_i+resolution-1] = prev_indices'
-            tube_mesh.connections[3, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
+            circshift!(shift_buffer, prev_indices, 1)
+            tube_mesh.connections[3, connection_i:connection_i+resolution-1] = shift_buffer'
             connection_i += resolution
 
             tube_mesh.connections[1, connection_i:connection_i+resolution-1] = current_indices'
-            tube_mesh.connections[2, connection_i:connection_i+resolution-1] = circshift(prev_indices, 1)'
-            tube_mesh.connections[3, connection_i:connection_i+resolution-1] = circshift(current_indices, 1)'
+            tube_mesh.connections[2, connection_i:connection_i+resolution-1] = shift_buffer'
+            circshift!(shift_buffer, current_indices, 1)
+            tube_mesh.connections[3, connection_i:connection_i+resolution-1] = shift_buffer'
             connection_i += resolution
         end
 

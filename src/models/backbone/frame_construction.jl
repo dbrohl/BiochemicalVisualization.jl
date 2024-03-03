@@ -5,15 +5,15 @@ Returns normalized (tangents, normals, binormals).
 based on W. Wang, B. Jüttler, D. Zheng, and Y. Liu, "Computation of rotation minimizing frames", doi: 10.1145/1330511.1330513.
 """
 function rmf(points::Matrix{T}, tangents::Matrix{T}) where T
-    ts = Matrix{T}(undef, 3, size(points, 2))
+    ts = copy(tangents)
     rs = Matrix{T}(undef, 3, size(points, 2))
     ss = Matrix{T}(undef, 3, size(points, 2))
 
-    for (i, col) in enumerate(eachcol(tangents)) #alloc
-        if(approx_zero(norm(col)))
-            log_warning("zero length tangent in rmf (index $i/$(size(tangents, 2))): $col")
+    for i in axes(ts, 2)
+        if(approx_zero(norm(ts[:, i])))
+            log_warning("zero length tangent in rmf (index $i/$(size(ts, 2))): $(ts[:, i])")
         end
-        ts[:, i] .= col ./ norm(col)
+        normalize!(ts[:, i])
     end
 
     if(approx_zero(ts[2, 1]) && approx_zero(ts[3, 1]))
@@ -61,17 +61,17 @@ function frames_from_two_splines(major_spline_points::Matrix{T}, major_spline_ta
 
 
     @views for i=axes(major_spline_tangents, 2)
-        ts[:, i] = major_spline_tangents[:, i] ./ norm(major_spline_tangents[:, i])
+        ts[:, i] = normalize(major_spline_tangents[:, i])
 
         # rs vectors are difference between sampled spline point and the outer spline
         rs[:, i] = minor_spline_points[:, i] .- major_spline_points[:, i]
         #project r onto plane that is perpendicular to tangent
-        rs[:, i] ./= norm(rs[:, i])
+        normalize!(rs[:, i])
         rs[:, i] .-= (dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) .* ts[:, i])
-        rs[:, i] ./= norm(rs[:, i])
+        normalize!(rs[:, i])
 
         # third axis is perpendicular to the tangent and r
-        ss[:, i] = cross(ts[:, i], rs[:, i]) #alloc why?
+        cross!(ss[:, i], ts[:, i], rs[:, i]) #alloc why?
     end
     return ts, rs, ss
 end

@@ -29,7 +29,7 @@
 end
 
 @testitem "create_in_local_frame" begin
-    using BiochemicalVisualization: create_circle_in_local_frame, create_ellipse_in_local_frame, create_rectangle_in_local_frame
+    using BiochemicalVisualization: create_circle_in_local_frame!, create_ellipse_in_local_frame!, create_rectangle_in_local_frame!
     using LinearAlgebra
 
 
@@ -51,24 +51,36 @@ end
     1 0 2]
 
     # all points of a circle have the same distance to the origin
-    c0,nc0 = create_circle_in_local_frame(points2[:, 1], points2[:, 2], points2[:, 3], 20, 1)
+    c0 = Matrix{Float64}(undef, 3, 20)
+    nc0 = Matrix{Float64}(undef, 3, 20)
+    create_circle_in_local_frame!(c0,nc0, points2[:, 1], points2[:, 2], points2[:, 3], 20, 1)
     distances = norm.(map(p->p.-points2[:,1], eachcol(c0)))
     @test allapproxequal(distances)
 
-    c1,nc1 = create_circle_in_local_frame(points[:, 1], points[:, 2], points[:, 3], 20, 1)
+    c1 = Matrix{Float64}(undef, 3, 20)
+    nc1 = Matrix{Float64}(undef, 3, 20)
+    create_circle_in_local_frame!(c1,nc1, points[:, 1], points[:, 2], points[:, 3], 20, 1)
     distances = norm.(map(p->p.-points[:,1], eachcol(c1)))
     @test allapproxequal(distances)
 
     # circles and ellipses can be equivalent when applying the right scales
-    e1,ne1 = create_ellipse_in_local_frame(points[:, 1], points[:, 2], points[:, 3], 20, 1, 1)
+    e1 = Matrix{Float64}(undef, 3, 20)
+    ne1 = Matrix{Float64}(undef, 3, 20)
+    create_ellipse_in_local_frame!(e1,ne1, points[:, 1], points[:, 2], points[:, 3], 20, 1, 1)
     @test c1==e1
 
-    c2,nc2 = create_circle_in_local_frame(points[:, 1], points[:, 2], 2*points[:, 3], 20, 1)
-    e2,ne2 = create_ellipse_in_local_frame(points[:, 1], points[:, 2], points[:, 3], 20, 1, 2)
+    c2 = Matrix{Float64}(undef, 3, 20)
+    nc2 = Matrix{Float64}(undef, 3, 20)
+    e2 = Matrix{Float64}(undef, 3, 20)
+    ne2 = Matrix{Float64}(undef, 3, 20)
+    create_circle_in_local_frame!(c2,nc2, points[:, 1], points[:, 2], 2*points[:, 3], 20, 1)
+    create_ellipse_in_local_frame!(e2,ne2, points[:, 1], points[:, 2], points[:, 3], 20, 1, 2)
     @test c2==e2
 
     # rectangle
-    r1, nr1 = create_rectangle_in_local_frame(points[:, 1], points[:, 2], 2*points[:, 3], 20, 1, 2)
+    r1 = Matrix{Float64}(undef, 3, 20)
+    nr1 = Matrix{Float64}(undef, 3, 20)
+    create_rectangle_in_local_frame!(r1, nr1, points[:, 1], points[:, 2], 2*points[:, 3], 20, 1, 2)
     min_max_x = extrema(r1[1, :])
     min_max_y = extrema(r1[2, :])
     for point in eachcol(r1)
@@ -86,9 +98,15 @@ end
     @test size(c1)==size(r1)
 
     # zero radius => all points are the center point
-    c3,nc3 = create_circle_in_local_frame(points[:, 1], points[:, 2], points[:, 3], 20, 0)
-    e3,ne3 = create_ellipse_in_local_frame(points[:, 1], points[:, 2], points[:, 3], 20, 0, 0)
-    r3,nr3 = create_rectangle_in_local_frame(points[:, 1], points[:, 2], points[:, 3], 20, 0, 0)
+    c3 = Matrix{Float64}(undef, 3, 20)
+    nc3 = Matrix{Float64}(undef, 3, 20)
+    e3 = Matrix{Float64}(undef, 3, 20)
+    ne3 = Matrix{Float64}(undef, 3, 20)
+    r3 = Matrix{Float64}(undef, 3, 20)
+    nr3 = Matrix{Float64}(undef, 3, 20)
+    create_circle_in_local_frame!(c3,nc3, points[:, 1], points[:, 2], points[:, 3], 20, 0)
+    create_ellipse_in_local_frame!(e3,ne3, points[:, 1], points[:, 2], points[:, 3], 20, 0, 0)
+    create_rectangle_in_local_frame!(r3,nr3, points[:, 1], points[:, 2], points[:, 3], 20, 0, 0)
     for obj in [c3, e3, r3]
         for point in eachcol(obj)
             @test point ≈ points[:, 1]
@@ -129,37 +147,52 @@ end
     @test merge_multiple_meshes(Vector{PlainMesh{Int64}}()) == empty
 end
 
-@testitem "connect_circles_to_tube" begin
-    using BiochemicalVisualization: PlainMesh, PlainNonStdMesh, connect_circles_to_tube, merge_multiple_meshes
+@testitem "add_faces_to_tube_mesh!" begin
+    using BiochemicalVisualization: PlainMesh, add_faces_to_tube_mesh!
 
-    points = [0 0 1
-    0 1 0
-    0 0 0]
-    normals = [0 0 0
-    0 0 0
-    1 1 1]
-    colors = [(0, 0, 0), (255, 0, 0), (0, 255, 0)]
-    a = PlainNonStdMesh(points, normals, [[1,2,3]], colors)
-
-    a_std = PlainMesh(points, normals, reshape([1,2,3], (3, 1)), colors)
-
+    # nothing happens to an empty mesh
     empty = PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
+    m1 = PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
+    add_faces_to_tube_mesh!(m1, 3, 0)
+    @test m1==empty
 
-    @test connect_circles_to_tube(Vector{PlainNonStdMesh{Int}}())==empty
-    res_single = connect_circles_to_tube([a])
-    @test res_single.vertices==a.vertices
-    @test res_single.colors==a.colors
-    @test size(res_single.connections)==(3, 0)
+    # only one cross-section + endcaps
+    small = PlainMesh([0 0 0 -1 1
+                        1 -1 -1 0 0
+                        0 -1 1 0 0], 
+                    copy(repeat([1 0 0], 5)'), 
+                    [1 2 3 1 2 3
+                    3 1 2 3 1 2
+                    4 4 4 5 5 5], 
+                    repeat([(0, 0, 0)], 5))
+    m2 = PlainMesh([0 0 0 -1 1
+                    1 -1 -1 0 0
+                    0 -1 1 0 0], 
+                copy(repeat([1 0 0], 5)'), 
+                Matrix{Int}(undef, 3, 0), 
+                repeat([(0, 0, 0)], 5))
+    add_faces_to_tube_mesh!(m2, 3, 1)
+    println("Faces", m2.connections)
+    @test m2==small
     
-    res_connect = connect_circles_to_tube([a, a])
-    @test size(res_connect.vertices, 2) == 2*size(a.vertices, 2)
-    @test length(res_connect.colors) == 2*length(a.colors)
-    @test size(res_connect.connections, 2) == 6
-
-    res_endpoints = connect_circles_to_tube([a, a], (([0, 0, 0], [0,0,1]), ([1,1,1], [0,0,1])))
-    @test size(res_endpoints.vertices, 2)==size(res_connect.vertices, 2)+2
-    @test length(res_endpoints.colors) == length(res_connect.colors)+2
-    @test size(res_endpoints.connections, 2) > size(res_connect.connections, 2)
+    # one tube segment
+    medium = PlainMesh([0 0 0 1 1 1 -1 1
+                        1 -1 -1 1 -1 -1 0 0
+                        0 -1 1 0 -1 1 0 0], 
+                    copy(repeat([1 0 0], 8)'), 
+                    [4 5 6 4 5 6 1 2 3 4 5 6
+                    1 2 3 3 1 2 3 1 2 6 4 5
+                    3 1 2 6 4 5 7 7 7 8 8 8], 
+                    repeat([(0, 0, 0)], 8))
+    m3 = PlainMesh([0 0 0 1 1 1 -1 1
+                    1 -1 -1 1 -1 -1 0 0
+                    0 -1 1 0 -1 1 0 0], 
+                copy(repeat([1 0 0], 8)'), 
+                Matrix{Int}(undef, 3, 0), 
+                repeat([(0, 0, 0)], 8))
+    add_faces_to_tube_mesh!(m3, 3, 2)
+    println("Faces", m3.connections)
+    @test m3==medium
 end
 
 @testitem "DebugOutput" begin

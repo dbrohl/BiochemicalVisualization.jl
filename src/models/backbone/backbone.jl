@@ -396,8 +396,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
     # allocate memory
     num_vertices = (remaining_count+num_transition_points)*config.resolution + 2 # end "caps"
-    num_faces = (remaining_count+num_transition_points-1)*config.resolution*2 + 2*config.resolution # connections between neighbor circles + connections to the end points
-    spline_mesh = PlainMesh(Array{T}(undef, 3, num_vertices), Array{T}(undef, 3, num_vertices), Array{Int}(undef, 3, num_faces), Vector{NTuple{3, Int}}(undef, num_vertices))
+    spline_mesh = PlainMesh(Array{T}(undef, 3, num_vertices), Array{T}(undef, 3, num_vertices), Array{Int}(undef, 3, 0), Vector{NTuple{3, Int}}(undef, num_vertices))
 
     # weave spline_points and transition_points together
     picker = Array{Int}(undef, 2, remaining_count+num_transition_points)
@@ -436,7 +435,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     Threads.@threads for j=1:remaining_count+num_transition_points
         local color_in_thread
         if(config.color==Color.RAINBOW)
-            println("Color: ", j/(remaining_count+num_transition_points))
             color_in_thread = rainbow(j/(remaining_count+num_transition_points))
         else
             color_in_thread = fixed_color

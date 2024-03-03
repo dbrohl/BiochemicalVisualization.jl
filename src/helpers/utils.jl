@@ -63,6 +63,32 @@ function n_colors(n)
     return colors
 end
 
+"""
+Inplace cross()
+"""
+function cross!(dest::AbstractVector, a::AbstractVector, b::AbstractVector)
+    if !(length(a) == length(b) == length(dest) == 3)
+        throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
+    end
+    a1, a2, a3 = a
+    b1, b2, b3 = b
+    dest .= (a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1)
+end
+
+""""
+Normalizes a 3-element column of an array. 
+"""
+function normalize_col!(arr, i)
+    dist = 0
+    for j=1:3
+        dist += arr[j, i]^2
+    end
+    dist = sqrt(dist)
+    for j=1:3
+        arr[j, i] /= dist
+    end
+end
+
 function approx_zero(value)
     return abs(value)< 10^-5
 end

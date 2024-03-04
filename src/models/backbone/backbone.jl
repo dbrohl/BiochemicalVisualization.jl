@@ -469,7 +469,6 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
                 r[:, picker[2, j]], 
                 s[:, picker[2, j]], 
                 sample_to_residue_indices[picker[2, j]],
-                sample_to_residue_indices[picker[2, j]],
                 config.backbone_type==BackboneType.CARTOON ? rectangle_widths[picker[2, j]] : T(1.0),
                 color_in_thread,
                 spline.residue_info_dict,

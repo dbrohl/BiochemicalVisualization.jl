@@ -14,6 +14,24 @@ function insert_sorted!(array, elem)
     insert!(array, index, elem)
 end
 
+function check_config(config::BackboneConfig)
+    if(config.stick_radius<=0)
+        throw(ArgumentError("stick_radius has to be >0"))
+    end
+    if(config.resolution_along<0.7)
+        throw(ArgumentError("resolution along the spline has to be >=0.7")) # TODO why does it crash with 0.4, for example?
+    end
+    if(config.resolution_cross<3)
+        throw(ArgumentError("at least three vertices per cross-section are necessary (resolution_cross>=3)"))
+    end
+    if(config.color==Color.ELEMENT)
+        throw(ArgumentError("backbone-based models cannot be colored by elements of individual atoms"))
+    end
+    if(config.control_point_strategy==ControlPoints.C_ALPHA && config.frame==Frame.SECOND_SPLINE)
+        throw(ArgumentError("for a second spline, ControlPoints.MID_POINTS is mandatory"))
+    end
+end
+
 """
 Loops over a the list sample_indices and counts observed secondary structures. 
 - sample_indices contains keys for the residue_info_dict. 
@@ -101,9 +119,11 @@ function compute_frame_widths(fragment_list::Vector{Fragment{T}}, sample_to_resi
             if(is_last_frame)
                 frames_in_residue_count += 1
             end
-            if(prev_res_idx ∈ arrow_fragment_indices || (is_last_frame && res_idx ∈ arrow_fragment_indices))
-                num_uniform = Int(round(frames_in_residue_count/3))
-                num_arrow = frames_in_residue_count - num_uniform
+            if(frames_in_residue_count >= 2
+                && (prev_res_idx ∈ arrow_fragment_indices || (is_last_frame && res_idx ∈ arrow_fragment_indices)))
+                num_arrow = max(2, Int(round(frames_in_residue_count*2/3)))
+                num_uniform = frames_in_residue_count - num_arrow
+                
                 uniforms = repeat([1], num_uniform)
                 arrow = collect(range(1.5, 0, num_arrow))
                 if(n_to_c)
@@ -159,20 +179,20 @@ function generate_geometry_at_point!(
     residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}},
     config::BackboneConfig{T}) where T
     # generate cross-section vertices
-    start_index = (result_mesh_index-1)*config.resolution+1
-    end_index = result_mesh_index*config.resolution
+    start_index = (result_mesh_index-1)*config.resolution_cross+1
+    end_index = result_mesh_index*config.resolution_cross
     if(config.backbone_type==BackboneType.BACKBONE)
-        create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, config.stick_radius)
+        create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, config.stick_radius)
     elseif(config.backbone_type==BackboneType.RIBBON)
-        create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, T(3)*config.stick_radius, config.stick_radius)
+        create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.stick_radius, config.stick_radius)
     elseif(config.backbone_type==BackboneType.CARTOON)
         structure = residue_info_dict[linked_residue_idx][2]
         if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
-            create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, config.stick_radius)
+            create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, config.stick_radius)
         elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
-            create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
+            create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
         elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-            create_rectangle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
+            create_rectangle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
         end
     end
 
@@ -217,22 +237,22 @@ function generate_geometry_at_point!(
     residue_info_dict::Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}},
     config::BackboneConfig{T}) where T
 
-    start_index = (result_mesh_index-1)*config.resolution+1
-    end_index = result_mesh_index*config.resolution
+    start_index = (result_mesh_index-1)*config.resolution_cross+1
+    end_index = result_mesh_index*config.resolution_cross
 
     # geometry
-    result_mesh.vertices[:, start_index:end_index] = stack(repeat([point], config.resolution)) # only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified (TODO)
-    result_mesh.normals[:, start_index:end_index] = stack(repeat([tangent], config.resolution))
+    result_mesh.vertices[:, start_index:end_index] = stack(repeat([point], config.resolution_cross)) # only 1 instead of resolution vertices would suffice, but then connect_circles_to_tube has to be modified (TODO)
+    result_mesh.normals[:, start_index:end_index] = stack(repeat([tangent], config.resolution_cross))
 
     # color
     color = nothing
     if(fixed_color!==nothing)
         color = fixed_color
     elseif(config.color==Color.SECONDARY_STRUCTURE)
-        structure = residue_info_dict[color_res_idx][2]
+        structure = residue_info_dict[linked_residue_idx][2]
         color = SS_COLORS[structure]
     elseif(config.color==Color.RESIDUE)
-        aa = residue_info_dict[color_res_idx][1]
+        aa = residue_info_dict[linked_residue_idx][1]
         color = AA_COLORS[aa]
     end
     for i=start_index:end_index
@@ -241,10 +261,13 @@ function generate_geometry_at_point!(
 end
 
 """
-Generates a PlainMesh for chain. The config should be checked previously. 
+Generates a PlainMesh for chain. 
 When the whole mesh should have a uniform color, it can be passed as fixed_color. 
 """
 function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
+
+    check_config(config)
+
     if(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
         fixed_color = (0, 0, 255)
     end
@@ -261,10 +284,9 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
         spline = Linear(chain, config.control_point_strategy)
     end
 
-    vertices_per_unit = T(0.4 * config.resolution / (2*π*config.stick_radius))
     # sample along spline
-    spline_points, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, vertices_per_unit) #alloc
-    velocities = calculate_velocities(spline, vertices_per_unit)
+    spline_points, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, config.resolution_along) #alloc
+    velocities = calculate_velocities(spline, config.resolution_along)
     
     # construct local frames
     local q::Matrix{T}
@@ -273,7 +295,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     if(config.frame==Frame.RMF)
         q, r, s = rmf(spline_points, velocities)
     elseif(config.frame==Frame.SECOND_SPLINE)
-        second_spline_points = calculate_minor_points(spline, vertices_per_unit)
+        second_spline_points = calculate_minor_points(spline, config.resolution_along)
         q, r, s = frames_from_two_splines(spline_points, velocities, second_spline_points)
     end
 
@@ -417,7 +439,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
 
 
     # allocate memory
-    num_vertices = (remaining_count+num_transition_points)*config.resolution + 2 # end "caps"
+    num_vertices = (remaining_count+num_transition_points)*config.resolution_cross + 2 # end "caps"
     spline_mesh = PlainMesh(Array{T}(undef, 3, num_vertices), Array{T}(undef, 3, num_vertices), Array{Int}(undef, 3, 0), Vector{NTuple{3, Int}}(undef, num_vertices))
 
     # weave spline_points and transition_points together
@@ -509,7 +531,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     end
 
 
-    add_faces_to_tube_mesh!(spline_mesh, config.resolution, remaining_count+num_transition_points)
+    add_faces_to_tube_mesh!(spline_mesh, config.resolution_cross, remaining_count+num_transition_points)
 
 
     log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
@@ -536,17 +558,9 @@ function prepare_backbone_model(
 
     start_time = now()
 
+    check_config(config)
 
     log_info(types, "Type: ", T)
-
-    if(config.color==Color.ELEMENT)
-        throw(ArgumentError("backbone-based models cannot be colored by elements of individual atoms"))
-    end
-    if(config.control_point_strategy==ControlPoints.C_ALPHA && config.frame==Frame.SECOND_SPLINE)
-        throw(ArgumentError("for a second spline, ControlPoints.MID_POINTS is mandatory"))
-    end
-
-    
 
     if(config.color==Color.UNIFORM)
         uniform_color = (255, 0, 0)

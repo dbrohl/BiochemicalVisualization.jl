@@ -125,7 +125,7 @@ function calculate_resolution_dependent_data(spline::Union{CatmullRom, CubicB}, 
     i = 1
     while i+3 <= size(spline.controlPoints, 2)
         distance = @views norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
-        push!(num_points, max(2, convert(Int, ceil(resolution * 1 * distance)))) #TODO factor
+        push!(num_points, max(2, convert(Int, ceil(resolution * distance))))
 
         if(spline.controlPointStrategy==ControlPoints.C_ALPHA)
             first_half_num = num_points[end] ÷ 2

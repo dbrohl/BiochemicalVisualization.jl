@@ -245,7 +245,7 @@ van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
 
 function backbone(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
 	default_config = BackboneConfig{T}(T(0.2), 
-			12, 
+			T(1.5), 12, 
 			BackboneType.BACKBONE, 
 			Color.CHAIN, 
 			Spline.CUBIC_B, 
@@ -262,14 +262,10 @@ function backbone(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply",
 	export_mesh_representation_to_ply(path, representation)
 end 
 
-# function backbone_gpu(ac)
-# 	representation = prepare_backbone_model_gpu(ac, resolution = 12)
-# 	export_mesh_representation_to_ply("BALL_export_backbone.ply", representation)
-# end 
 
 function ribbon(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
 	default_config = BackboneConfig{T}(T(0.2), 
-			12, 
+			T(1.5), 12, 
 			BackboneType.RIBBON, 
 			Color.CHAIN, 
 			Spline.CUBIC_B, 
@@ -288,7 +284,7 @@ end
 
 function cartoon(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
 	default_config = BackboneConfig{T}(T(0.2), 
-			12, 
+			T(1.5), 12, 
 			BackboneType.CARTOON, 
 			Color.SECONDARY_STRUCTURE, 
 			Spline.CUBIC_B, 

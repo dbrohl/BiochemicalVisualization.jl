@@ -41,7 +41,6 @@ mutable struct CubicB{T <: Real}
 end
 
 function calculate_points(spline::CubicB, resolution)
-    dict_key = Int(round(resolution*1000))
     return evaluate_generic_quadruple_spline(spline.controlPoints, num_points(spline, resolution), compute_cubicb_quadruple), sample_to_fragment_index_mapping(spline, resolution)
 end
 

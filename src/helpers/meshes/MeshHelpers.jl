@@ -8,7 +8,7 @@ function color!(mesh, new_color::NTuple{3, Int})
 end
 
 """
-Returns points that form a circle in the plane given by local_y and local_z. 
+Writes vertices that form a circle (in the plane given by local_y and local_z) into points (and corresponding normals into normals). 
 Resolution determines the number of points. 
 local_y and local_z are expected to have a length of 1. 
 
@@ -24,7 +24,7 @@ function create_circle_in_local_frame!(points::AbstractArray{T}, normals::Abstra
 end
 
 """
-Returns points that form an ellipse/ a scaled circle in the plane given by local_y and local_z.
+Writes vertices that form an ellipse/ a scaled circle (in the plane given by local_y and local_z) into points (and corresponding normals into normals). 
 half_width is the scale factor applied to local_y, half_height is applied to local_z.  
 Resolution determines the number of points. 
 local_y and local_z are expected to have a length of 1. 
@@ -41,7 +41,7 @@ function create_ellipse_in_local_frame!(points::AbstractArray{T}, normals::Abstr
 end
 
 """
-Returns points that form a rectangle in the plane given by local_y and local_z. 
+Writes vertices that form a rectangle (in the plane given by local_y and local_z) into points (and corresponding normals into normals). 
 Resolution determines the number of points. 
 local_y and local_z are expected to have a length of 1. 
 
@@ -49,7 +49,8 @@ See also [`create_circle_in_local_frame`](@ref), [`create_ellipse_in_local_frame
 """
 function create_rectangle_in_local_frame!(points::AbstractArray{T}, normals::AbstractArray{T}, center::AbstractArray{T}, local_y::AbstractArray{T}, local_z::AbstractArray{T}, resolution::Int, half_width, half_height) where T
     if(resolution<4)
-        create_ellipse_in_local_frame(points, normals, center, local_y, local_z, resolution, width, height)
+        create_ellipse_in_local_frame!(points, normals, center, local_y, local_z, resolution, half_width, half_height)
+        return
     end
 
     # each corner has a point
@@ -166,6 +167,7 @@ end
 """
 Adds faces between circles to create the surface of a tube. 
 The last two vertices are assumed to be the start- and end-cap respectively. 
+The resolution is the number of vertices per circle/cross_section. 
 """
 function add_faces_to_tube_mesh!(tube_mesh::PlainMesh{T}, resolution::Int, ncircles::Int) where {T}
 

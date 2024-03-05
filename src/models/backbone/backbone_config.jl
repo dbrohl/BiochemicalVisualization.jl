@@ -36,8 +36,8 @@ end
 "Collection of parameters that determine how backbone-based vizualizations are created. "
 mutable struct BackboneConfig{T}
     stick_radius::T
-    resolution::Int
-
+    resolution_along::T # the sampling frequency along the spline
+    resolution_cross::Int # the number of vertices in one cross section
     backbone_type::BackboneType.T
     color::Color.T
     spline::Spline.T
@@ -50,7 +50,8 @@ import Base.==
 function ==(a::BackboneConfig{T}, b::BackboneConfig{U}) where {T, U}
     return (T==U
     && a.stick_radius==b.stick_radius
-    && a.resolution==b.resolution 
+    && a.resolution_along==b.resolution_along
+    && a.resolution_cross==b.resolution_cross 
     && a.backbone_type==b.backbone_type 
     && a.color==b.color
     && a.spline==b.spline
@@ -62,7 +63,8 @@ end
 "Similar to BackboneConfig, but the datatypes include Nothing"
 mutable struct PartialBackboneConfig
     stick_radius::Union{Real, Nothing}
-    resolution::Union{Int, Nothing}
+    resolution_along::Union{Real,  Nothing} # the sampling frequency along the spline
+    resolution_cross::Union{Int,  Nothing} # the number of vertices in one cross section
 
     backbone_type::Union{BackboneType.T, Nothing}
     color::Union{Color.T, Nothing}
@@ -74,19 +76,21 @@ end
 
 function PartialBackboneConfig(;    
     stick_radius = nothing, 
-    resolution = nothing, 
+    resolution_along = nothing,
+    resolution_cross = nothing, 
     backbone_type = nothing, 
     color = nothing, 
     spline = nothing, 
     control_point_strategy = nothing, 
     frame = nothing, 
     filter = nothing)
-    return PartialBackboneConfig(stick_radius, resolution, backbone_type, color, spline, control_point_strategy, frame, filter)
+    return PartialBackboneConfig(stick_radius, resolution_along, resolution_cross, backbone_type, color, spline, control_point_strategy, frame, filter)
 end
 
 function ==(a::PartialBackboneConfig, b::PartialBackboneConfig)
     return (a.stick_radius==b.stick_radius
-    && a.resolution==b.resolution 
+    && a.resolution_along==b.resolution_along 
+    && a.resolution_cross==b.resolution_cross
     && a.backbone_type==b.backbone_type 
     && a.color==b.color
     && a.spline==b.spline
@@ -98,7 +102,8 @@ end
 function complete_config(partial::PartialBackboneConfig, template::BackboneConfig{T}) where {T}
     return BackboneConfig(
         partial.stick_radius===nothing ? template.stick_radius : T(partial.stick_radius),
-        partial.resolution===nothing ? template.resolution : partial.resolution,
+        partial.resolution_along===nothing ? template.resolution_along : T(partial.resolution_along),
+        partial.resolution_cross===nothing ? template.resolution_cross : partial.resolution_cross,
 
         partial.backbone_type===nothing ? template.backbone_type : partial.backbone_type,
         partial.color===nothing ? template.color : partial.color,

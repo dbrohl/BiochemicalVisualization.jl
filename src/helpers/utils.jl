@@ -33,7 +33,7 @@ function hsv_to_rgb(hue, saturation, value)
     end
 end
 
-function rgb_to_hex(rgb; prefix="")
+function rgb_to_hex(rgb::NTuple{3, Int}; prefix="")
     result = prefix
     for channel=1:3
         hex = string(rgb[channel], base=16)
@@ -44,6 +44,16 @@ function rgb_to_hex(rgb; prefix="")
     end
     return result
 end
+
+"Converts a string (possibly containing a prefix like \"#\"), into an NTuple{3, Int}(r, g, b). "
+function hex_to_rgb(hex::String)
+    hex = lstrip(c -> !('0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'), hex)
+    if length(hex)!=6
+        throw(ArgumentError("hex string with length!=6: $hex"))
+    end
+    return (parse(Int, hex[1:2], base=16), parse(Int, hex[3:4], base=16), parse(Int, hex[5:6], base=16))
+end
+
 
 """
 Generates a rainbow color where pos in [0;1] determines the hue. 

@@ -1,7 +1,7 @@
 function prepare_ball_and_stick_model(
         ac::AbstractAtomContainer{T}; 
         sphere_radius=T(0.4), 
-        stick_radius=T(0.2), resolution=30) where {T<:Real}
+        stick_radius=T(0.2)) where {T<:Real}
 
     start_time = now()
 

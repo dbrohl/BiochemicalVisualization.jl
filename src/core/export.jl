@@ -47,7 +47,6 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
     close(stream)
 end
 
-
 function export_mesh_to_ply(path::AbstractString, mesh::X) where {X<:Union{Meshes.SimpleMesh, ColoredMesh}}
 
     the_vertices = collect(mesh.vertices)
@@ -97,4 +96,86 @@ function export_mesh_to_ply(path::AbstractString, mesh::X) where {X<:Union{Meshe
     end
 
     close(stream)
+end
+
+function export_primitive_representation_to_ply(path::AbstractString, representation::Representation{T}; resolution = 12) where {T}
+    @assert (isempty(representation.vertices) 
+            && isempty(representation.normals) 
+            && isempty(representation.connections))
+
+
+
+    # make mesh
+    empty_mesh = PlainMesh{T}(zeros(T, (3, 0)), zeros(T, (3, 0)), zeros(Int, (3, 0)), Vector{NTuple{3, Int}}())
+    meshes = [empty_mesh]
+    for (key, primitive_list) in representation.primitives
+        local color_list
+        if in(key, keys(representation.colors))
+            color_list = representation.colors[key]
+            while(length(color_list))<length(primitive_list)
+                push!(color_list, "#FF0000")
+            end
+        else
+            color_list = repeat(["#FF0000"], length(primitive_list))
+        end
+        for (primitive, color) in zip(primitive_list, color_list)
+            try
+                mesh = primitive_to_mesh(primitive, resolution)
+                color!(mesh, hex_to_rgb(color))
+                push!(meshes, mesh)
+            catch ex
+                @warn "Primitive of type $(typeof(primitive)) could not be turned into a mesh: $ex"
+                rethrow(ex)
+            end
+        end
+    end
+    merged_mesh = merge_multiple_meshes(meshes)
+
+    # export mesh
+    rep = Representation(merged_mesh)
+    export_mesh_representation_to_ply(path, rep)
+end
+
+function primitive_to_mesh(prim::GeometryBasics.GeometryPrimitive{N, T}, resolution) where {N, T}
+    if N!=3
+        throw(ArgumentError("primitive was $N-D object instead of 3-D"))
+    end
+    if typeof(prim) <: GeometryBasics.Pyramid
+        throw(ArgumentError("cannot handle pyramid primitives yet"))
+    end
+    if typeof(prim) <: GeometryBasics.HyperRectangle
+        vertices = stack(GeometryBasics.coordinates(prim))
+        face_iterator = GeometryBasics.faces(prim)
+    else
+        vertices = stack(GeometryBasics.coordinates(prim, resolution))
+        face_iterator = GeometryBasics.faces(prim, resolution)
+    end
+
+    triangles = zeros(Int, (3, 0))
+    if(!isempty(face_iterator))
+        if typeof(first(face_iterator)) <: GeometryBasics.TriangleFace
+            triangles = stack(face_iterator)
+        elseif typeof(first(face_iterator)) <: GeometryBasics.QuadFace
+            triangles = Matrix{Int}(undef, 3, 2*length(face_iterator))
+            for (index, quad) in enumerate(face_iterator)
+                triangles[:, 2*(index-1)+1] = quad[1:3]
+                triangles[:, 2*index] = [quad[1] quad[3] quad[4]]
+            end
+        else
+            throw(ErrorException("unknown type of faces $(typeof(face_iterator))"))
+        end
+    end
+
+
+
+    if typeof(prim) <: GeometryBasics.Sphere
+        normals = stack(GeometryBasics.normals(prim, resolution))
+    else
+        normals = zeros(T, (3, size(vertices, 2))) #TODO generate correct normals
+        normals[1, :] .= 1
+    end
+
+
+    return PlainMesh{T}(vertices, normals, triangles, Vector{NTuple{3, Int}}(undef, size(vertices, 2)))
+
 end

@@ -1,7 +1,23 @@
-export export_mesh_to_ply
-function export_mesh_representation_to_ply(path::AbstractString, representation::Representation)
+export export_to_ply
 
-    @assert isempty(representation.primitives) # Only representations containing a mesh are exported here. 
+"Calls an appropriate specific export functions for different geometry/mesh/representation types. "
+function export_to_ply(path::AbstractString, representationOrMesh::Union{Meshes.SimpleMesh, ColoredMesh, Representation}; resolution=8)
+    if typeof(representationOrMesh) <: Representation
+        if ismesh(representationOrMesh)
+            export_mesh_representation_to_ply(path, representationOrMesh)
+        elseif isprimitivecollection(representationOrMesh)
+            export_primitive_representation_to_ply(path, representationOrMesh, resolution)
+        else
+            throw(ArgumentError("Representation is neither mesh nor collection of primitives"))
+        end
+    else
+        export_mesh_to_ply(path, representationOrMesh)
+    end
+end
+
+
+function export_mesh_representation_to_ply(path::AbstractString, representation::Representation)
+ 
     @assert length(representation.vertices)%3 == 0
 
     colors = first(representation.colors).second
@@ -47,6 +63,7 @@ function export_mesh_representation_to_ply(path::AbstractString, representation:
     close(stream)
 end
 
+"Exports previously used mesh types like Meshes.SimpleMesh and ColoredMesh. "
 function export_mesh_to_ply(path::AbstractString, mesh::X) where {X<:Union{Meshes.SimpleMesh, ColoredMesh}}
 
     the_vertices = collect(mesh.vertices)
@@ -98,12 +115,8 @@ function export_mesh_to_ply(path::AbstractString, mesh::X) where {X<:Union{Meshe
     close(stream)
 end
 
-function export_primitive_representation_to_ply(path::AbstractString, representation::Representation{T}; resolution = 12) where {T}
-    @assert (isempty(representation.vertices) 
-            && isempty(representation.normals) 
-            && isempty(representation.connections))
-
-
+"Exports a representation that contains geometric primitives. "
+function export_primitive_representation_to_ply(path::AbstractString, representation::Representation{T}, resolution) where {T}
 
     # make mesh
     empty_mesh = PlainMesh{T}(zeros(T, (3, 0)), zeros(T, (3, 0)), zeros(Int, (3, 0)), Vector{NTuple{3, Int}}())
@@ -129,13 +142,14 @@ function export_primitive_representation_to_ply(path::AbstractString, representa
             end
         end
     end
-    merged_mesh = merge_multiple_meshes(meshes)
+    merged_mesh = merge_meshes(meshes)
 
     # export mesh
     rep = Representation(merged_mesh)
     export_mesh_representation_to_ply(path, rep)
 end
 
+"Converts a GeometryPrimitive to a PlainMesh. "
 function primitive_to_mesh(prim::GeometryBasics.GeometryPrimitive{N, T}, resolution) where {N, T}
     if N!=3
         throw(ArgumentError("primitive was $N-D object instead of 3-D"))
@@ -147,6 +161,9 @@ function primitive_to_mesh(prim::GeometryBasics.GeometryPrimitive{N, T}, resolut
         vertices = stack(GeometryBasics.coordinates(prim))
         face_iterator = GeometryBasics.faces(prim)
     else
+        if typeof(prim) <: GeometryBasics.Sphere
+            resolution = resolution ÷ 2
+        end
         vertices = stack(GeometryBasics.coordinates(prim, resolution))
         face_iterator = GeometryBasics.faces(prim, resolution)
     end

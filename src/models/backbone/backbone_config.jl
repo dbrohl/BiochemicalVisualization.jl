@@ -1,4 +1,4 @@
-export BackboneConfig, # TODO remove once the export of prepare_backbone_model is removed
+export 
 PartialBackboneConfig, 
 BackboneType, Color, Spline, ControlPoints, Frame, Filter
 
@@ -111,4 +111,36 @@ function complete_config(partial::PartialBackboneConfig, template::BackboneConfi
         partial.control_point_strategy===nothing ? template.control_point_strategy : partial.control_point_strategy,
         partial.frame===nothing ? template.frame : partial.frame,
         partial.filter===nothing ? template.filter : partial.filter,)
+end
+
+function add_to_config!(main::PartialBackboneConfig, addition::PartialBackboneConfig)
+
+    if main.stick_radius===nothing
+        main.stick_radius = addition.stick_radius
+    end
+    if main.resolution_along===nothing
+        main.resolution_along = addition.resolution_along
+    end
+    if main.resolution_cross===nothing
+        main.resolution_cross = addition.resolution_cross
+    end
+
+    if main.backbone_type===nothing
+        main.backbone_type = addition.backbone_type
+    end
+    if main.color===nothing
+        main.color = addition.color
+    end
+    if main.spline===nothing
+        main.spline = addition.spline
+    end
+    if main.control_point_strategy===nothing
+        main.control_point_strategy = addition.control_point_strategy
+    end
+    if main.frame===nothing
+        main.frame = addition.frame
+    end
+    if main.filter===nothing
+        main.filter = addition.filter
+    end
 end

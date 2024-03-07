@@ -1,10 +1,4 @@
-export prepare_backbone_model, generate_chain_mesh, generate_geometry_at_point, benchmark_method # TODO remove
-
-function benchmark_method(ac::System{T}, config::BackboneConfig) where T
-    mesh = prepare_backbone_model(ac, config)
-    representation = Representation(mesh) 
-    return representation
-end
+export prepare_backbone_model
 
 """
 Inserts elem into array. Assuming that array is sorted ascending, it will be still sorted after the insertion. 
@@ -14,7 +8,23 @@ function insert_sorted!(array, elem)
     insert!(array, index, elem)
 end
 
-function check_config(config::BackboneConfig)
+function check_config(user_config::Union{Nothing, PartialBackboneConfig}, T)
+    default_config = BackboneConfig{T}(
+        T(0.2), 
+        T(1.5), 
+        12, 
+        BackboneType.BACKBONE, 
+        Color.RAINBOW, 
+        Spline.CUBIC_B, 
+        ControlPoints.MID_POINTS, 
+        Frame.RMF, 
+        Filter.ANGLE)
+
+    if user_config===nothing
+        config = default_config
+    else
+        config = complete_config(user_config, default_config)
+    end
     if(config.stick_radius<=0)
         throw(ArgumentError("stick_radius has to be >0"))
     end
@@ -30,6 +40,8 @@ function check_config(config::BackboneConfig)
     if(config.control_point_strategy==ControlPoints.C_ALPHA && config.frame==Frame.SECOND_SPLINE)
         throw(ArgumentError("for a second spline, ControlPoints.MID_POINTS is mandatory"))
     end
+
+    return config
 end
 
 """
@@ -264,9 +276,9 @@ end
 Generates a PlainMesh for chain. 
 When the whole mesh should have a uniform color, it can be passed as fixed_color. 
 """
-function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
+function prepare_backbone_model(chain::Chain{T}, partial_config::Union{PartialBackboneConfig, Nothing}=nothing; fixed_color::Union{Nothing, NTuple{3, Int}} = nothing) where {T<:Real}
 
-    check_config(config)
+    config = check_config(partial_config, T)
 
     if(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
         fixed_color = (0, 0, 255)
@@ -537,7 +549,7 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     log_info(types, "Type of spline mesh: ", typeof(spline_mesh))
 
     # ----- debug export -----
-    # cs = merge_multiple_meshes(circle_meshes)
+    # cs = merge_meshes(circle_meshes)
     # export_mesh_representation_to_ply("circles.ply", Representation(cs))
 
     # fs = reduce(merge, framesA)
@@ -547,41 +559,34 @@ function prepare_backbone_model(chain::Chain{T}, config::BackboneConfig{T}, fixe
     # export_mesh_to_ply("framesB.ply", fs)
     # ------------------------
     
-    return spline_mesh
+    return Representation(spline_mesh)
 end
 
 """
 Generates a PlainMesh for a system. 
 """
-function prepare_backbone_model(
-    ac::System{T}, config::BackboneConfig{T}) where {T<:Real}
+function prepare_backbone_model(ac::System{T}, partial_config::Union{PartialBackboneConfig, Nothing}=nothing) where {T<:Real}
 
     start_time = now()
 
-    check_config(config)
 
     log_info(types, "Type: ", T)
 
-    if(config.color==Color.UNIFORM)
-        uniform_color = (255, 0, 0)
-    elseif(config.color==Color.CHAIN)
+    if(partial_config.color==Color.CHAIN)
         chain_colors = n_colors(nchains(ac))
     end
 
-    empty_mesh = PlainMesh(zeros(T, (3, 0)), zeros(T, (3, 0)), zeros(Int, (3, 0)), Vector{NTuple{3, Int}}())
-    chain_meshes = fill(empty_mesh, (nchains(ac)))
+    chain_reps::Vector{Union{Missing, Representation{T}}} = fill(missing, (nchains(ac)))
     for (chain_idx, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
         try
             color = nothing
-            if(config.color==Color.UNIFORM)
-                color = uniform_color
-            elseif(config.color==Color.CHAIN)
+            if(partial_config.color==Color.CHAIN)
                 color = chain_colors[chain_idx]
             end
 
-            chain_mesh = prepare_backbone_model(chain, config, color)
+            chain_rep = prepare_backbone_model(chain, partial_config, fixed_color=color)
 
-            chain_meshes[chain_idx] = chain_mesh
+            chain_reps[chain_idx] = chain_rep
         catch e
             if e isa ErrorException
                 log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
@@ -590,14 +595,57 @@ function prepare_backbone_model(
             end
         end
     end
-    if(length(chain_meshes)==0)
-        throw(ErrorException("No chain meshes were generated. "))
+    result_reps::Vector{Representation{T}} = filter(!ismissing, chain_reps)
+    if(length(result_reps)==0)
+        log_info(misc, "No chain meshes were generated. ")
     end
-    temp = merge_multiple_meshes(chain_meshes)
-    log_info(types, "Type of result: ", typeof(temp))
+    result = merge_representations(result_reps)
+    log_info(types, "Type of result: ", typeof(result))
 
-    log_info(time_info, "Generated backbone mesh in $((now()-start_time).value/1000) seconds. ($(size(temp.vertices, 2)) vertices)")
+    log_info(time_info, "Generated backbone mesh in $((now()-start_time).value/1000) seconds. ($(size(result.vertices, 2)) vertices)")
 
-    return temp
+    return result
 
+end
+
+
+# convenience functions with default settings
+function prepare_ribbon_model(
+    ac::System{T}, partial_config::Union{PartialBackboneConfig, Nothing}=nothing) where {T<:Real}
+
+    default = PartialBackboneConfig(0.2, 
+        1.5, 12, 
+        BackboneType.RIBBON, 
+        Color.CHAIN, 
+        Spline.CUBIC_B, 
+        ControlPoints.MID_POINTS, 
+        Frame.SECOND_SPLINE, 
+        Filter.ANGLE)
+    if partial_config!==nothing
+        add_to_config!(partial_config, default)
+    else
+        partial_config = default
+    end
+    
+    return prepare_backbone_model(ac, partial_config)
+end
+
+function prepare_cartoon_model(
+    ac::System{T}, partial_config::Union{PartialBackboneConfig, Nothing}=nothing) where {T<:Real}
+
+	default = PartialBackboneConfig(0.2, 
+        1.5, 12, 
+        BackboneType.CARTOON, 
+        Color.SECONDARY_STRUCTURE, 
+        Spline.CUBIC_B, 
+        ControlPoints.MID_POINTS, 
+        Frame.SECOND_SPLINE, 
+        Filter.ANGLE)
+    if partial_config!==nothing
+        add_to_config!(partial_config, default)
+    else
+        partial_config = default
+    end
+
+    return prepare_backbone_model(ac, partial_config)
 end

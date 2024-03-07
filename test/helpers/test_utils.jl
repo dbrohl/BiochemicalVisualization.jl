@@ -7,13 +7,18 @@
     @test hsv_to_rgb(0, 1, 0)==(0, 0, 0)
 end
 
-@testitem "rgb_to_hex" begin
-    using BiochemicalVisualization: rgb_to_hex
+@testitem "rgb_to_hex and hex_to_rgb" begin
+    using BiochemicalVisualization: rgb_to_hex, hex_to_rgb
 
     @test rgb_to_hex((0, 0, 0)) == "000000"
     @test rgb_to_hex((255, 0, 0)) == "ff0000"
     @test rgb_to_hex((255, 0, 0), prefix="#") == "#ff0000"
     @test rgb_to_hex((255, 0, 0), prefix="0x") == "0xff0000"
+
+    @test hex_to_rgb("000000")==(0, 0, 0)
+    @test hex_to_rgb("ff0000")==(255, 0, 0)
+    @test hex_to_rgb("#ff0000")==(255, 0, 0)
+    @test hex_to_rgb("0xff0000")==(255, 0, 0)
 end
 
 @testitem "n_colors" begin

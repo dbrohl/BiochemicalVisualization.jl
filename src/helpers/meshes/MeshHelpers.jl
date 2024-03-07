@@ -129,39 +129,46 @@ function local_arrow_mesh(center, vector, color)
 end
 
 "Merges multiple mesh objects into one. The geometry (vertices/edges/faces) does not change. "
-function merge_multiple_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
-    num_points = sum(map(m -> size(m.vertices, 2), meshes))
-    num_connects = sum(map(m -> size(m.connections, 2), meshes))
+function merge_meshes(meshes::AbstractVector{PlainMesh{T}}) where T
 
-    points = Matrix{T}(undef, 3, num_points)
-    normals = Matrix{T}(undef, 3, num_points)
-    a = 1
-    for m in meshes
-        points[:, a:a+size(m.vertices, 2)-1] .= m.vertices
-        normals[:, a:a+size(m.normals, 2)-1] .= m.normals
-        a += size(m.vertices, 2)
-    end
-
-    colors = Array{NTuple{3, Int}}(undef, num_points)
-    connects = Array{Int, 2}(undef, 3, num_connects)
-
-    point_offset = 0
-    connect_offset = 0
-    for m in meshes
-        point_len = size(m.vertices, 2)
-        connect_len = size(m.connections, 2)
-
-        
-        colors[point_offset+1 : point_offset+point_len] = m.colors
-        
-
-        connects[:, connect_offset+1 : connect_offset+connect_len] .= m.connections .+ point_offset
-
-        point_offset += point_len
-        connect_offset += connect_len
-    end
+    points, normals, connects, colors = merge_meshes(
+        map(m -> m.vertices, meshes), 
+        map(m -> m.normals, meshes), 
+        map(m -> m.connections, meshes), 
+        map(m -> m.colors, meshes))
 
     return PlainMesh{T}(points, normals, connects, colors)
+end
+
+function merge_meshes(vertex_list::AbstractVector{Matrix{T}}, 
+    normal_list::AbstractVector{Matrix{T}}, 
+    connection_list::AbstractVector{Matrix{Int}}, 
+    color_list::AbstractVector{X}) where {T, Y <: Union{String, NTuple{3, Int}}, X <: AbstractVector{Y}}
+
+    num_points = sum(map(m -> size(m, 2), vertex_list))
+    num_connects = sum(map(m -> size(m, 2), connection_list))
+    
+    points = Matrix{T}(undef, 3, num_points)
+    normals = Matrix{T}(undef, 3, num_points)
+    connects = Array{Int, 2}(undef, 3, num_connects)
+    colors = Array{Y}(undef, num_points)
+
+    point_count = 0
+    connection_count = 0
+
+    for (v, n, con, col) in zip(vertex_list, normal_list, connection_list, color_list)
+        num = size(v, 2)
+        points[:, point_count+1:point_count+num] .= v
+        normals[:, point_count+1:point_count+num] .= n
+        colors[point_count+1:point_count+num] .= col
+
+        connects[:, connection_count+1:connection_count+size(con, 2)] .= con .+ point_count
+
+        point_count += num
+        connection_count += size(con, 2)
+    end
+
+    return points, normals, connects, colors
 end
 
 """

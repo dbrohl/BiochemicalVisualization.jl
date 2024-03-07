@@ -1,11 +1,3 @@
-export 
-ball_and_stick, 
-stick, 
-van_der_waals,
-backbone,
-ribbon,
-cartoon
-
 const VISUALIZE = ES6Module(asset_path("visualize_structure.js"))::Asset
 
 sp = Base.source_path()
@@ -136,40 +128,41 @@ const ELEMENT_COLORS = [
 ]
 
 const AA_COLORS = Dict{String, NTuple{3, Int}}(
-"ALA" => (199, 33, 221), 
-"ARG" => (209, 74, 0), 
-"ASN" => (0, 140, 0), 
-"ASP" => (0, 127, 177), 
-"CYS" => (209, 172, 0), 
-"GLN" => (135, 0, 54), 
-"GLU" => (255, 143, 161), 
-"GLY" => (0, 0, 139), 
-"HIS" => (46, 255, 113), 
-"ILE" => (103, 82, 0), 
-"LEU" => (0, 208, 217), 
-"LYS" => (0, 80, 67), 
-"MET" => (126, 116, 126), 
-"PHE" => (163, 189, 255), 
-"PRO" => (149, 160, 135), 
-"SER" => (255, 172, 121), 
-"THR" => (94, 35, 0), 
-"TRP" => (255, 255, 160), 
-"TYR" => (73, 62, 94), 
-"VAL" => (255, 136, 255), 
-"PYL" => (241, 0, 79), 
-"SEC" => (0, 139, 118), 
-"ASX" => (0, 78, 193), 
-"XLE" => (42, 0, 23), 
-"GLX" => (255, 217, 255), 
-"XAA" => (189, 171, 168), 
-"TER" => (38, 42, 0), 
-"GAP" => (182, 249, 217)
+	"ALA" => (199, 33, 221), 
+	"ARG" => (209, 74, 0), 
+	"ASN" => (0, 140, 0), 
+	"ASP" => (0, 127, 177), 
+	"CYS" => (209, 172, 0), 
+	"GLN" => (135, 0, 54), 
+	"GLU" => (255, 143, 161), 
+	"GLY" => (0, 0, 139), 
+	"HIS" => (46, 255, 113), 
+	"ILE" => (103, 82, 0), 
+	"LEU" => (0, 208, 217), 
+	"LYS" => (0, 80, 67), 
+	"MET" => (126, 116, 126), 
+	"PHE" => (163, 189, 255), 
+	"PRO" => (149, 160, 135), 
+	"SER" => (255, 172, 121), 
+	"THR" => (94, 35, 0), 
+	"TRP" => (255, 255, 160), 
+	"TYR" => (73, 62, 94), 
+	"VAL" => (255, 136, 255), 
+	"PYL" => (241, 0, 79), 
+	"SEC" => (0, 139, 118), 
+	"ASX" => (0, 78, 193), 
+	"XLE" => (42, 0, 23), 
+	"GLX" => (255, 217, 255), 
+	"XAA" => (189, 171, 168), 
+	"TER" => (38, 42, 0), 
+	"GAP" => (182, 249, 217)
 )
 
 const SS_COLORS = Dict(
 	SecondaryStructure.NONE => (255, 255, 255), 
 	SecondaryStructure.HELIX => (255, 75, 120), 
-	SecondaryStructure.SHEET => (255, 150, 0))
+	SecondaryStructure.SHEET => (255, 150, 0)
+)
 
 element_color_web(e) = rgb_to_hex(get(ELEMENT_COLORS, Int(e), ELEMENT_COLORS[end]), prefix="#")
 
@@ -237,66 +230,7 @@ function display_model(ac::Union{AbstractAtomContainer, Observable{<:AbstractAto
 end
 
 # The following three methods do not work anymore since the Representation was changed. 
-# This will be fixed when merging this code with Pascal's frontend/Javascript contribution. 
-ball_and_stick(ac) = display_model(ac; type="BALL_AND_STICK")
-stick(ac)          = display_model(ac; type="STICK")
-van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")
-
-
-function backbone(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
-	default_config = BackboneConfig{T}(T(0.2), 
-			T(1.5), 12, 
-			BackboneType.BACKBONE, 
-			Color.CHAIN, 
-			Spline.CUBIC_B, 
-			ControlPoints.MID_POINTS, 
-			Frame.RMF, 
-			Filter.ANGLE)
-	if(config===nothing)
-		config = default_config
-	else
-		config = complete_config(config, default_config)
-	end
-	mesh = prepare_backbone_model(ac, config)
-	representation = Representation(mesh)
-	export_mesh_representation_to_ply(path, representation)
-end 
-
-
-function ribbon(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
-	default_config = BackboneConfig{T}(T(0.2), 
-			T(1.5), 12, 
-			BackboneType.RIBBON, 
-			Color.CHAIN, 
-			Spline.CUBIC_B, 
-			ControlPoints.MID_POINTS, 
-			Frame.SECOND_SPLINE, 
-			Filter.ANGLE)
-	if(config===nothing)
-		config = default_config
-	else
-		config = complete_config(config, default_config)
-	end
-	mesh = prepare_backbone_model(ac, config)
-	representation = Representation(mesh)
-	export_mesh_representation_to_ply(path, representation)
-end
-
-function cartoon(ac::AbstractAtomContainer{T}; path="BALL_export_backbone.ply", config::Union{PartialBackboneConfig, Nothing}=nothing) where {T}
-	default_config = BackboneConfig{T}(T(0.2), 
-			T(1.5), 12, 
-			BackboneType.CARTOON, 
-			Color.SECONDARY_STRUCTURE, 
-			Spline.CUBIC_B, 
-			ControlPoints.MID_POINTS, 
-			Frame.SECOND_SPLINE, 
-			Filter.ANGLE)
-	if(config===nothing)
-		config = default_config
-	else
-		config = complete_config(config, default_config)
-	end
-	mesh = prepare_backbone_model(ac, config)
-	representation = Representation(mesh)
-	export_mesh_representation_to_ply(path, representation)
-end 
+# This will be fixed when merging this code with Pascal's frontend/Javascript contribution. TODO
+# ball_and_stick(ac) = display_model(ac; type="BALL_AND_STICK")
+# stick(ac)          = display_model(ac; type="STICK")
+# van_der_waals(ac)  = display_model(ac; type="VAN_DER_WAALS")

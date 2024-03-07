@@ -62,4 +62,66 @@ GeometryBasics.Cylinder(origin::Vector3{T}, extremity::Vector3{T}, radius::T) wh
 center(s::GeometryBasics.Sphere)   = s.center
 center(c::GeometryBasics.Cylinder) = c.origin + 0.5 * (c.extremity - c.origin)
 
+function ismesh(rep::Representation)
+    return (isempty(rep.primitives) 
+            && !isempty(rep.vertices) 
+            && !isempty(rep.normals) 
+            && !isempty(rep.connections) 
+            && length(rep.colors)==1
+            && collect(keys(rep.colors)) == ["mesh"])
+end
+
+function isprimitivecollection(rep::Representation)
+    return (!isempty(rep.primitives) 
+        && isempty(rep.vertices) 
+        && isempty(rep.normals) 
+        && isempty(rep.connections) 
+        && !isempty(rep.colors))
+end
+
+"Merges multiple representation objects into one. The contained geometry does not change. "
+function merge_representations(list::AbstractVector{Representation{T}}) where {T}
+    if length(list)==0
+        return Representation{T}()
+    elseif length(list)==1
+        return list[1]
+    else
+        if all(map(ismesh, list))
+            points, normals, connects, colors = merge_meshes(
+                map(r -> reshape(r.vertices, (3, :)), list), 
+                map(r -> reshape(r.normals, (3, :)), list), 
+                map(r -> reshape(r.connections, (3, :)), list), 
+                map(r -> r.colors["mesh"], list))
+
+            return Representation{T}(vertices=vec(points), normals=vec(normals), connections=vec(connects), colors=Dict("mesh"=>colors))
+        elseif all(map(isprimitivecollection, list))
+            # generate safe keys
+            max_length = 0
+            for rep in list
+                local_max = max(map(length, [keys(rep.primitives)..., keys(rep.colors)]))
+                max_length = max(max_length, local_max)
+            end
+            prefix = repeat('_', max_length+1)
+
+            # put all entries into the new Representation
+            result = Representation{T}()
+            for (i, rep) in enumerate(list)
+                for (key, value) in rep.primitives
+                    result.primitives[prefix*i*key] = value
+                end
+            end
+            for (i, rep) in enumerate(list)
+                for (key, value) in rep.colors
+                    result.colors[prefix*i*key] = value
+                end
+            end
+
+            return result
+        else
+            throw(ErrorException("Mixed representations in list. "))
+        end
+    end
+end
+
+
 

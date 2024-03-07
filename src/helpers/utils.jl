@@ -47,7 +47,12 @@ end
 
 "Converts a string (possibly containing a prefix like \"#\"), into an NTuple{3, Int}(r, g, b). "
 function hex_to_rgb(hex::String)
-    hex = lstrip(c -> !('0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'), hex)
+    for i=length(hex)-1:-1:1
+        if !('0'<=hex[i]<='9' || 'a'<=hex[i]<='f' || 'A'<=hex[i]<='F')
+            hex = hex[i+1:end]
+            break
+        end
+    end
     if length(hex)!=6
         throw(ArgumentError("hex string with length!=6: $hex"))
     end

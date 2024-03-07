@@ -115,13 +115,19 @@ end
 end
 
 @testitem "merge_multiple_meshes" begin
-    using BiochemicalVisualization: PlainMesh, merge_multiple_meshes
+    using BiochemicalVisualization: PlainMesh, merge_meshes, merge_representations
+
+    empty = PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
+    @test merge_meshes(Vector{PlainMesh{Int64}}()) == empty
 
     triangle = PlainMesh([0 0 1
     0 1 0
     0 0 0], [0 0 0
     0 0 0
     1 1 1],reshape([1, 2, 3], (3, 1)), [(0, 0, 0), (255, 0, 0), (0, 255, 0)])
+
+    @test merge_meshes([triangle]) == triangle
+    @test merge_meshes([triangle, empty]) == triangle
 
     square = PlainMesh([0 0 1 1
     0 1 0 1
@@ -131,20 +137,21 @@ end
     2 3
     3 4], [(0, 0, 0), (255, 0, 0), (0, 255, 0), (0, 0, 255)])
 
-    empty = PlainMesh(Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}())
-
-    ts = merge_multiple_meshes([triangle, square])
+    ts = merge_meshes([triangle, square])
+    
     @test size(ts.vertices) == (3, 7)
     @test size(ts.connections) == (3, 3)
     @test size(ts.colors) == (7, )
 
-    st = merge_multiple_meshes([square, triangle])
+    st = merge_meshes([square, triangle])
     @test Set(eachcol(ts.vertices)) == Set(eachcol(st.vertices))
 
-    @test merge_multiple_meshes([triangle, empty]) == triangle
-    @test merge_multiple_meshes([triangle]) == triangle
+    rep_t = Representation(triangle)
+    rep_s = Representation(square)
 
-    @test merge_multiple_meshes(Vector{PlainMesh{Int64}}()) == empty
+    rep_res = merge_representations([rep_t, rep_s])
+    @test rep_res==Representation(ts)
+
 end
 
 @testitem "add_faces_to_tube_mesh!" begin

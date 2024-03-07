@@ -35,7 +35,7 @@ end
 
 "Collection of parameters that determine how backbone-based vizualizations are created. "
 mutable struct BackboneConfig{T}
-    stick_radius::T
+    tube_radius::T
     resolution_along::T # the sampling frequency along the spline
     resolution_cross::Int # the number of vertices in one cross section
     backbone_type::BackboneType.T
@@ -49,7 +49,7 @@ end
 import Base.==
 function ==(a::BackboneConfig{T}, b::BackboneConfig{U}) where {T, U}
     return (T==U
-    && a.stick_radius==b.stick_radius
+    && a.tube_radius==b.tube_radius
     && a.resolution_along==b.resolution_along
     && a.resolution_cross==b.resolution_cross 
     && a.backbone_type==b.backbone_type 
@@ -62,7 +62,7 @@ end
 
 "Similar to BackboneConfig, but the datatypes include Nothing"
 mutable struct PartialBackboneConfig
-    stick_radius::Union{Real, Nothing}
+    tube_radius::Union{Real, Nothing}
     resolution_along::Union{Real,  Nothing} # the sampling frequency along the spline
     resolution_cross::Union{Int,  Nothing} # the number of vertices in one cross section
 
@@ -75,7 +75,7 @@ mutable struct PartialBackboneConfig
 end
 
 function PartialBackboneConfig(;    
-    stick_radius = nothing, 
+    tube_radius = nothing, 
     resolution_along = nothing,
     resolution_cross = nothing, 
     backbone_type = nothing, 
@@ -84,11 +84,11 @@ function PartialBackboneConfig(;
     control_point_strategy = nothing, 
     frame = nothing, 
     filter = nothing)
-    return PartialBackboneConfig(stick_radius, resolution_along, resolution_cross, backbone_type, color, spline, control_point_strategy, frame, filter)
+    return PartialBackboneConfig(tube_radius, resolution_along, resolution_cross, backbone_type, color, spline, control_point_strategy, frame, filter)
 end
 
 function ==(a::PartialBackboneConfig, b::PartialBackboneConfig)
-    return (a.stick_radius==b.stick_radius
+    return (a.tube_radius==b.tube_radius
     && a.resolution_along==b.resolution_along 
     && a.resolution_cross==b.resolution_cross
     && a.backbone_type==b.backbone_type 
@@ -101,7 +101,7 @@ end
 
 function complete_config(partial::PartialBackboneConfig, template::BackboneConfig{T}) where {T}
     return BackboneConfig(
-        partial.stick_radius===nothing ? template.stick_radius : T(partial.stick_radius),
+        partial.tube_radius===nothing ? template.tube_radius : T(partial.tube_radius),
         partial.resolution_along===nothing ? template.resolution_along : T(partial.resolution_along),
         partial.resolution_cross===nothing ? template.resolution_cross : partial.resolution_cross,
 
@@ -115,8 +115,8 @@ end
 
 function add_to_config!(main::PartialBackboneConfig, addition::PartialBackboneConfig)
 
-    if main.stick_radius===nothing
-        main.stick_radius = addition.stick_radius
+    if main.tube_radius===nothing
+        main.tube_radius = addition.tube_radius
     end
     if main.resolution_along===nothing
         main.resolution_along = addition.resolution_along

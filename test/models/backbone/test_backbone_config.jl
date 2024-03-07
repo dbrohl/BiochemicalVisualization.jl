@@ -1,5 +1,5 @@
 @testitem "BackboneConfig" begin
-    using BiochemicalVisualization: BackboneConfig, complete_config
+    using BiochemicalVisualization: BackboneConfig, complete_config, add_to_config!
 
     # check that types in struct are working
     @test_throws MethodError BackboneConfig()
@@ -47,7 +47,7 @@
 
     # test complete_config
     empty = PartialBackboneConfig()
-    large = PartialBackboneConfig(stick_radius=100)
+    large = PartialBackboneConfig(tube_radius=100)
     full = BackboneConfig(0.2, 1.5,
                             12, 
                             BackboneType.CARTOON, 
@@ -59,8 +59,40 @@
 
     @test complete_config(empty, full)==full
     @test complete_config(large, full)!=full
-    @test complete_config(large, full).stick_radius==100
+    @test complete_config(large, full).tube_radius==100
     @test complete_config(large, full).resolution_cross==12
 
-    
+    # test add_to_config!
+    empty = PartialBackboneConfig()
+    large = PartialBackboneConfig(tube_radius=100)
+    full = PartialBackboneConfig(0.2, 1.5,
+                            12, 
+                            BackboneType.CARTOON, 
+                            Color.SECONDARY_STRUCTURE, 
+                            Spline.CUBIC_B, 
+                            ControlPoints.MID_POINTS, 
+                            Frame.SECOND_SPLINE, 
+                            Filter.ANGLE)
+
+    a = deepcopy(empty)
+    add_to_config!(a, large)
+    @test a==large
+
+    a = deepcopy(empty)
+    add_to_config!(a, full)
+    @test a==full
+
+    a = deepcopy(large)
+    add_to_config!(a, full)
+    @test a!=large && a!=full
+    @test a.tube_radius==100
+    @test a.resolution_cross==12
+
+    a.tube_radius = 0.2
+    @test a==full    
+
+
+    a = deepcopy(full)
+    add_to_config!(a, large)
+    @test a==full
 end

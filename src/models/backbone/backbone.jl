@@ -1,4 +1,4 @@
-export prepare_backbone_model
+export prepare_backbone_model, prepare_ribbon_model, prepare_cartoon_model
 
 """
 Inserts elem into array. Assuming that array is sorted ascending, it will be still sorted after the insertion. 
@@ -25,8 +25,8 @@ function check_config(user_config::Union{Nothing, PartialBackboneConfig}, T)
     else
         config = complete_config(user_config, default_config)
     end
-    if(config.stick_radius<=0)
-        throw(ArgumentError("stick_radius has to be >0"))
+    if(config.tube_radius<=0)
+        throw(ArgumentError("tube_radius has to be >0"))
     end
     if(config.resolution_along<0.7)
         throw(ArgumentError("resolution along the spline has to be >=0.7")) # TODO why does it crash with 0.4, for example?
@@ -194,17 +194,17 @@ function generate_geometry_at_point!(
     start_index = (result_mesh_index-1)*config.resolution_cross+1
     end_index = result_mesh_index*config.resolution_cross
     if(config.backbone_type==BackboneType.BACKBONE)
-        create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, config.stick_radius)
+        create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, config.tube_radius)
     elseif(config.backbone_type==BackboneType.RIBBON)
-        create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.stick_radius, config.stick_radius)
+        create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.tube_radius, config.tube_radius)
     elseif(config.backbone_type==BackboneType.CARTOON)
         structure = residue_info_dict[linked_residue_idx][2]
         if(structure==BiochemicalAlgorithms.SecondaryStructure.NONE)
-            create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, config.stick_radius)
+            create_circle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, config.tube_radius)
         elseif(structure==BiochemicalAlgorithms.SecondaryStructure.HELIX)
-            create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.stick_radius, T(1.5)*config.stick_radius)
+            create_ellipse_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.tube_radius, T(1.5)*config.tube_radius)
         elseif(structure==BiochemicalAlgorithms.SecondaryStructure.SHEET)
-            create_rectangle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.stick_radius * rectangle_width, T(0.5)*config.stick_radius)
+            create_rectangle_in_local_frame!(@view(result_mesh.vertices[:, start_index:end_index]), @view(result_mesh.normals[:, start_index:end_index]), point, normal, binormal, config.resolution_cross, T(3)*config.tube_radius * rectangle_width, T(0.5)*config.tube_radius)
         end
     end
 
@@ -572,7 +572,7 @@ function prepare_backbone_model(ac::System{T}, partial_config::Union{PartialBack
 
     log_info(types, "Type: ", T)
 
-    if(partial_config.color==Color.CHAIN)
+    if partial_config!==nothing && partial_config.color==Color.CHAIN
         chain_colors = n_colors(nchains(ac))
     end
 
@@ -580,7 +580,7 @@ function prepare_backbone_model(ac::System{T}, partial_config::Union{PartialBack
     for (chain_idx, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
         try
             color = nothing
-            if(partial_config.color==Color.CHAIN)
+            if partial_config!==nothing && partial_config.color==Color.CHAIN
                 color = chain_colors[chain_idx]
             end
 

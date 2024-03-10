@@ -1,28 +1,63 @@
+export prepare_ball_and_stick_model
+
 function prepare_ball_and_stick_model(
-        ac::AbstractAtomContainer{T}; 
-        sphere_radius=T(0.4), 
-        stick_radius=T(0.2)) where {T<:Real}
+        chain::Chain{T}, 
+        config::Union{Nothing, BallStickConfig{T}}=nothing; 
+        fixed_color::Union{Nothing, NTuple{3, Int}}=nothing) where {T <: Real}
 
-    start_time = now()
+    if config===nothing
+        config = BallStickConfig{T}(T(0.4), T(0.2), Color.ELEMENT)
+    end
 
-    spheres = map(a -> GeometryBasics.Sphere(a.r, sphere_radius), atoms(ac))
-    sphere_colors = [element_color_web(e) for e in atoms_df(ac).element]
+    sys = parent_system(chain)
 
-    sticks = [(atom_by_idx(ac, b.a1), 
-            atom_by_idx(ac, b.a2)) for b in bonds(ac)]
-
+    # geometry
+    spheres = map(a -> GeometryBasics.Sphere(a.r, config.sphere_radius), atoms(chain))
+    sticks = [(atom_by_idx(sys, b.a1), 
+                atom_by_idx(sys, b.a2)) for b in bonds(chain)]
     midpoints = map(s -> (s[1].r + T(0.5)*(s[2].r - s[1].r)), sticks)
-
     cylinders = collect(Iterators.flatten(map(((s,m),) -> (
-        GeometryBasics.Cylinder(s[1].r, m, stick_radius), 
-        GeometryBasics.Cylinder(m, s[2].r, stick_radius)), zip(sticks, midpoints))))
-    cylinder_colors = collect(Iterators.flatten(
-        map(s -> (element_color_web(s[1].element), element_color_web(s[2].element)), sticks)))
+        GeometryBasics.Cylinder(s[1].r, m, config.stick_radius), 
+        GeometryBasics.Cylinder(m, s[2].r, config.stick_radius)), zip(sticks, midpoints))))
+
+    # colors
+    if config.color==Color.UNIFORM || config.color==Color.CHAIN
+        color_string = get_string_color(config.color, first(atoms(chain)), fixed_color)
+        sphere_colors = repeat([color_string], length(spheres))
+        cylinder_colors = repeat([color_string], length(cylinders))
+
+    else
+
+        # cache colors for all atoms 
+        color_dict = Dict{Int, String}()
+        for atom in eachatom(chain)
+            color_dict[atom.idx] = get_string_color(config.color, atom, fixed_color)
+        end
+
+        sphere_colors = Vector{String}(undef, length(color_dict))
+        for (i, atom_idx) in enumerate(atoms_df(chain).idx)
+            sphere_colors[i] = color_dict[atom_idx]
+        end
+
+        cylinder_colors = collect(
+                    Iterators.flatten(
+                        map(
+                            s -> (color_dict[s[1].idx], color_dict[s[2].idx]), 
+                            sticks)
+                        )
+                    )
+    end
 
     result = Representation{T}(
         primitives=Dict([("spheres", spheres), ("cylinders", cylinders)]), 
         colors=Dict([("spheres", sphere_colors), ("cylinders", cylinder_colors)]))
     
-    log_info(time_info, "Generated ball&stick representation in $((now()-start_time).value/1000) seconds. ")
+    
     return result
+end
+
+function prepare_ball_and_stick_model(
+    ac::System{T}, config::Union{Nothing, BallStickConfig{T}}=nothing; 
+    fixed_color::Union{Nothing, NTuple{3, Int}}=nothing) where {T<:Real}
+    return handle_multichain_model(ac, config, fixed_color, prepare_ball_and_stick_model)
 end

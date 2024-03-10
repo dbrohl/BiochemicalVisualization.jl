@@ -1,13 +1,20 @@
-function prepare_van_der_waals_model(
-    ac::AbstractAtomContainer{T}; resolution=30) where {T<:Real}
+export prepare_van_der_waals_model
 
-    # todo: get vdw radii
-    start_time = now()
-    spheres = map(a -> GeometryBasics.Sphere(a.r, max(a.radius, T(1.0))), atoms(ac))
-    sphere_colors = [element_color_web(e) for e in atoms_df(ac).element]
+function prepare_van_der_waals_model(
+    ac::System{T}, config::Union{Nothing, VdWConfig}=nothing; 
+    fixed_color::Union{Nothing, NTuple{3, Int}}=nothing) where {T<:Real}
+    return handle_multichain_model(ac, config, fixed_color, prepare_van_der_waals_model)
+end
+
+function prepare_van_der_waals_model(
+    chain::Chain{T}, 
+    config::Union{Nothing, VdWConfig}=nothing; 
+    fixed_color::Union{Nothing, NTuple{3, Int}}=nothing) where {T <: Real}
+
+    spheres = map(a -> GeometryBasics.Sphere(a.r, a.radius==0 ? T(1.0) : a.radius), atoms(chain))
+    sphere_colors = [get_string_color(config.color, atom, fixed_color) for atom in eachatom(chain)]
 
     result = Representation{T}(primitives=Dict([("spheres", spheres)]), colors=Dict([("spheres", sphere_colors)]))
-    log_info(time_info, "Generated vdw representation in $((now()-start_time).value/1000) seconds. ")
     
     return result 
 end

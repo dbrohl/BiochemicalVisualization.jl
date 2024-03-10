@@ -1,6 +1,9 @@
-function prepare_stick_model(
-        ac::AbstractAtomContainer{T}; 
-        stick_radius=T(0.2), resolution=30) where {T<:Real}
+export prepare_stick_model
 
-    prepare_ball_and_stick_model(ac; sphere_radius=stick_radius, stick_radius=stick_radius, resolution=resolution)
+function prepare_stick_model(
+    ac::Union{System{T}, Chain{T}}, 
+    config::Union{Nothing, StickConfig{T}}=nothing; 
+    fixed_color::Union{Nothing, NTuple{3, Int}}=nothing) where {T <: Real}
+
+    return prepare_ball_and_stick_model(ac, BallStickConfig{T}(config.stick_radius, config.stick_radius, config.color), fixed_color=fixed_color)
 end

@@ -98,7 +98,7 @@ function merge_representations(list::AbstractVector{Representation{T}}) where {T
             # generate safe keys
             max_length = 0
             for rep in list
-                local_max = max(map(length, [keys(rep.primitives)..., keys(rep.colors)]))
+                local_max = maximum(map(length, [keys(rep.primitives)..., keys(rep.colors)]))
                 max_length = max(max_length, local_max)
             end
             prefix = repeat('_', max_length+1)
@@ -107,12 +107,12 @@ function merge_representations(list::AbstractVector{Representation{T}}) where {T
             result = Representation{T}()
             for (i, rep) in enumerate(list)
                 for (key, value) in rep.primitives
-                    result.primitives[prefix*i*key] = value
+                    result.primitives[prefix*string(i)*key] = value
                 end
             end
             for (i, rep) in enumerate(list)
                 for (key, value) in rep.colors
-                    result.colors[prefix*i*key] = value
+                    result.colors[prefix*string(i)*key] = value
                 end
             end
 

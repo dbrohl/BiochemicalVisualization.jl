@@ -1,20 +1,12 @@
 export 
 PartialBackboneConfig, 
-BackboneType, Color, Spline, ControlPoints, Frame, Filter
+BackboneType, Spline, ControlPoints, Frame, Filter
 
 @enumx BackboneType begin
     BACKBONE
     RIBBON
     CARTOON
 end
-@enumx Color begin
-    UNIFORM
-    CHAIN
-    RAINBOW
-    SECONDARY_STRUCTURE
-    RESIDUE
-    ELEMENT
-end # TODO charge? hydrophobicity?
 @enumx Spline begin
     LINEAR
     CATMULL_ROM

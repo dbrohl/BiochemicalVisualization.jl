@@ -27,6 +27,9 @@ export asset_path
 
 include("helpers/Logger.jl")
 
+include("core/config.jl")
+
+
 include("helpers/meshes/PlainMesh.jl")
 include("helpers/meshes/PlainNonStdMesh.jl")
 include("helpers/meshes/ColoredMesh.jl")
@@ -35,10 +38,6 @@ include("helpers/utils.jl")
 include("helpers/point_filter.jl")
 
 include("core/representation.jl")
-
-
-
-
 include("core/export.jl")
 
 include("models/backbone/backbone_config.jl")

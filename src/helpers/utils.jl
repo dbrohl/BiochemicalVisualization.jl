@@ -107,3 +107,79 @@ end
 function approx_zero(value)
     return abs(value)< 10^-5
 end
+
+"""
+Handles logistics for generic models with more than one chain. Assumptions: 
+* config!==nothing => config.color existiert
+* single_chain_function is called with types (chain{T}, Union{config, Nothing}; fixed_color=Union{Nothing, NTuple{3, Int}})
+* single_chain_function throws ErrorExceptions when something goes wrong
+"""
+function handle_multichain_model(ac::System{T}, config, fixed_color, single_chain_function) where T
+    start_time = now()
+    log_info(types, "Type: ", T)
+
+    if config!==nothing && config.color==Color.CHAIN
+        chain_colors = n_colors(nchains(ac))
+    end
+
+    chain_reps::Vector{Union{Missing, Representation{T}}} = fill(missing, (nchains(ac)))
+    for (chain_idx, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
+        try
+            color = nothing
+            if config!==nothing && config.color==Color.UNIFORM && fixed_color!==nothing
+                color = fixed_color
+            end
+            if config!==nothing && config.color==Color.CHAIN
+                color = chain_colors[chain_idx]
+            end
+
+            chain_rep = single_chain_function(chain, config, fixed_color=color)
+
+            chain_reps[chain_idx] = chain_rep
+        catch e
+            if e isa ErrorException #TODO
+                log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
+            else
+                rethrow(e)
+            end
+        end
+    end
+    result_reps::Vector{Representation{T}} = filter(!ismissing, chain_reps)
+    if(length(result_reps)==0)
+        log_info(misc, "No chain representations were generated. ")
+    end
+    result = merge_representations(result_reps)
+    log_info(types, "Type of result: ", typeof(result))
+
+    log_info(time_info, "Generated representation in $((now()-start_time).value/1000) seconds. ")
+
+    return result
+end
+
+
+function get_string_color(color::Color.T, atom, fixed_color::Union{NTuple{3, Int}, Nothing})
+    if color==Color.UNIFORM || color==Color.CHAIN
+        color = (fixed_color===nothing ? (255, 0, 0) : fixed_color)
+        return rgb_to_hex(color, prefix="#")
+
+    elseif color==Color.RAINBOW #rainbow per residue
+        chain = parent_chain(atom)
+        min_idx, max_idx = extrema(fragments_df(chain).idx)
+
+        frag = parent_fragment(atom)
+        return rgb_to_hex(rainbow((frag.idx-min_idx)/(max_idx-min_idx)), prefix="#")
+
+    elseif color==Color.SECONDARY_STRUCTURE 
+        frag = parent_fragment(atom)
+        return rgb_to_hex(SS_COLORS[frag.properties[:SS]], prefix="#")
+
+    elseif color==Color.RESIDUE
+        frag = parent_fragment(atom)
+        return rgb_to_hex(AA_COLORS[frag.name], prefix="#")
+
+    elseif color==Color.ELEMENT
+        return element_color_web(atom.element)
+    else
+        throw(ArgumentError("unknown color config $(color)"))
+    end
+end

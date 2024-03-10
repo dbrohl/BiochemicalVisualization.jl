@@ -281,7 +281,7 @@ function prepare_backbone_model(chain::Chain{T}, partial_config::Union{PartialBa
     config = check_config(partial_config, T)
 
     if(fixed_color===nothing && (config.color==Color.UNIFORM || config.color==Color.CHAIN))
-        fixed_color = (0, 0, 255)
+        fixed_color = (255, 0, 0)
     end
 
     fragment_list = fragments(chain) #TODO fragments/eachfragment
@@ -565,47 +565,9 @@ end
 """
 Generates a PlainMesh for a system. 
 """
-function prepare_backbone_model(ac::System{T}, partial_config::Union{PartialBackboneConfig, Nothing}=nothing) where {T<:Real}
-
-    start_time = now()
-
-
-    log_info(types, "Type: ", T)
-
-    if partial_config!==nothing && partial_config.color==Color.CHAIN
-        chain_colors = n_colors(nchains(ac))
-    end
-
-    chain_reps::Vector{Union{Missing, Representation{T}}} = fill(missing, (nchains(ac)))
-    for (chain_idx, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
-        try
-            color = nothing
-            if partial_config!==nothing && partial_config.color==Color.CHAIN
-                color = chain_colors[chain_idx]
-            end
-
-            chain_rep = prepare_backbone_model(chain, partial_config, fixed_color=color)
-
-            chain_reps[chain_idx] = chain_rep
-        catch e
-            if e isa ErrorException
-                log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
-            else
-                rethrow(e)
-            end
-        end
-    end
-    result_reps::Vector{Representation{T}} = filter(!ismissing, chain_reps)
-    if(length(result_reps)==0)
-        log_info(misc, "No chain meshes were generated. ")
-    end
-    result = merge_representations(result_reps)
-    log_info(types, "Type of result: ", typeof(result))
-
-    log_info(time_info, "Generated backbone mesh in $((now()-start_time).value/1000) seconds. ($(size(result.vertices, 2)) vertices)")
-
-    return result
-
+function prepare_backbone_model(ac::System{T}, partial_config::Union{PartialBackboneConfig, Nothing}=nothing; 
+    fixed_color::Union{Nothing, NTuple{3, Int}}=nothing) where {T<:Real}
+    return handle_multichain_model(ac, partial_config, fixed_color, prepare_backbone_model)
 end
 
 

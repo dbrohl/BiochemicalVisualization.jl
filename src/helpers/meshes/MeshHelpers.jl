@@ -150,8 +150,8 @@ function merge_meshes(vertex_list::AbstractVector{Matrix{T}},
     
     points = Matrix{T}(undef, 3, num_points)
     normals = Matrix{T}(undef, 3, num_points)
-    connects = Array{Int, 2}(undef, 3, num_connects)
-    colors = Array{Y}(undef, num_points)
+    connects = Matrix{Int}(undef, 3, num_connects)
+    colors = Vector{Y}(undef, num_points)
 
     point_count = 0
     connection_count = 0

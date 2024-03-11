@@ -9,7 +9,7 @@ mutable struct CubicB{T <: Real}
     num_points_per_resolution::Dict{Int, Vector}
     sample_mapping_per_resolution::Dict{Int, Vector}
 
-    function CubicB(chain::Chain{T}, control_point_strategy) where T #TODO correct first and last points?
+    function CubicB{T}(chain::Chain{T}, control_point_strategy) where T #TODO correct first and last points?
         if(control_point_strategy==ControlPoints.C_ALPHA)
             points, point_to_residue_indices, residue_info_dict = get_c_alpha_positions(chain)
             if(length(points)<2)
@@ -62,14 +62,14 @@ function compute_cubicb_quadruple((P0, P1, P2, P3)::NTuple{4, AbstractVector{T}}
     3 -6 3 0
     -1 3 -3 1]
     p_matrix = [P0 P1 P2 P3]'
-    fixed_part = T(1/6) * M * p_matrix
+    fixed_part::Matrix{T} = (T(1/6) * M * p_matrix)'
 
     sampling_range = range(T(0), T(1), num_points)
 
-    t_matrix::Matrix{T} = [1 0 0 0]
+    t_matrix::Vector{T} = [T(1), 0, 0, 0]
     for (i, t) in enumerate(sampling_range)
-        t_matrix[1, 2:4] = [t t^2 t^3]
-        result_points[:, i] = t_matrix * fixed_part
+        t_matrix[2:4] = [t, t^2, t^3]
+        mul!(@view(result_points[:, i:i]), fixed_part, t_matrix)
     end
     return result_points
 end
@@ -82,13 +82,13 @@ function compute_cubicb_quadruple_derivative((P0, P1, P2, P3)::NTuple{4, Abstrac
     3 -6 3 0
     -1 3 -3 1]
     p_matrix = [P0 P1 P2 P3]'
-    fixed_part = T(1/6) * M * p_matrix
+    fixed_part::Matrix{T} = (T(1/6) * M * p_matrix)'
 
     sampling_range = range(T(0), T(1), num_points)
-    t_matrix::Matrix{T} = [0 1 0 0]
+    t_matrix::Vector{T} = [T(0), 1, 0, 0]
     for (i, t) in enumerate(sampling_range)
-        t_matrix[1, 3:4] = [2*t 3*t^2]
-        result_points[:, i] = t_matrix * fixed_part
+        t_matrix[3:4] = [2*t, 3*t^2]
+        mul!(@view(result_points[:, i:i]), fixed_part, t_matrix)
     end
     return result_points
 end

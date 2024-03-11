@@ -1,5 +1,5 @@
 export ColoredMesh, merge
-struct ColoredMesh{Dim,T,V<:AbstractVector{Meshes.Point{Dim,T}},TP<:Meshes.Topology} <: Meshes.Mesh{Dim,T}
+struct ColoredMesh{Dim,T,V<:AbstractVector{Meshes.Point{Dim,T}},TP<:Meshes.Topology}
     vertices::V
     topology::TP
     colors::Vector{NTuple{3, Int}}

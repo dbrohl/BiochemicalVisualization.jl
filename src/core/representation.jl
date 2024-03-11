@@ -3,11 +3,11 @@ export Representation
 # A Representation can contain either a multiple collections of primitives and their colors or a colored mesh.
 # The mesh has to contain triangle faces only.
 struct Representation{T <: Real}
-    primitives::Dict{String, AbstractVector{GeometryBasics.GeometryPrimitive{3,T}}}
-    vertices::AbstractVector{T}
-    normals::AbstractVector{T}
-    connections::AbstractVector{Int}
-    colors::Dict{String, AbstractVector{String}}
+    primitives::Dict{String, Vector{GeometryBasics.GeometryPrimitive{3,T}}}
+    vertices::Vector{T}
+    normals::Vector{T}
+    connections::Vector{Int}
+    colors::Dict{String, Vector{String}}
 
     function Representation{T}(;
         primitives=Dict{String, Vector{GeometryBasics.GeometryPrimitive{3,T}}}(),
@@ -26,8 +26,16 @@ function Representation(mesh::PlainMesh{T}) where T
     c = vec(mesh.connections) .- 1
 
     colors = Vector{String}(undef, length(mesh.colors))
+    # except for Color.RAINBOW, the number of different colors is small
+    color_dict = Dict{NTuple{3, Int}, String}()
     for (i, c) in enumerate(mesh.colors)
-        colors[i] = rgb_to_hex(c, prefix="#")
+        if haskey(color_dict, c)
+            colors[i] = color_dict[c]
+        else
+            str = rgb_to_hex(c, prefix="#")
+            colors[i] = str
+            color_dict[c] = str
+        end
     end
 
     return Representation{T}(

@@ -1,44 +1,37 @@
 function get_c_alpha_positions(chain::Chain{T}, with_oxygens=false) where T
-    cas::Vector{Tuple{Atom{T}, Fragment{T}}} = []
-    os ::Vector{Tuple{Atom{T}, Fragment{T}}}= []
-    for x in eachatom(chain)
-        if x.element==Elements.C && x.name=="CA"
-            parent = parent_fragment(x)
-            if is_amino_acid(parent)
-                push!(cas, (x, parent))
-            end
-        end
+
+    sys = parent_system(chain)
+
+    atom_data = atoms_df(chain)[:, [:idx, :element, :name, :r, :properties]]
+    subset!(atom_data, :name => ByRow(n -> n=="CA" || (with_oxygens && n=="O")))
+    select!(atom_data, :idx, :element, :name, :r, :properties, :idx => ByRow(id -> parent_fragment(atom_by_idx(sys, id)).idx) => :parent_idx)
+
+    residue_data = fragments_df(chain)[:, [:idx, :name, :properties]]
+    subset!(residue_data, :name => names -> is_amino_acid.(names))
     
-        if with_oxygens && x.element==Elements.O && x.name=="O"
-            parent = parent_fragment(x)
-            if is_amino_acid(parent)
-                push!(os, (x, parent))
-            end
-        end
-    end
+    result_data = innerjoin(atom_data, residue_data, on = :parent_idx => :idx, renamecols = "_atom" => "_residue")
 
-    if(with_oxygens && length(cas)!=length(os))
-        log_warning("different number of c-alpha ($(length(cas))) and oxygen ($(length(os))) atoms")
-        if(length(cas)<length(os))
-            os = os[1:length(cas)]
-        else
-            cas = cas[1:length(os)]
-        end
+    if with_oxygens
+        n = size(result_data, 1) ÷ 2
+        oxygen_positions = Matrix{T}(undef, 3, n)
+    else
+        n = size(result_data, 1)
     end
-
-    positions = Matrix{T}(undef, 3, length(cas))
-    indices = Vector{Int}(undef, length(cas))
+    positions = Matrix{T}(undef, 3, n)
+    indices = Vector{Int}(undef, n)
     residue_info_dict = Dict{Int, Tuple{String, BiochemicalAlgorithms.SecondaryStructure.T}}()
 
-    for (i, (ca, fragment)) in enumerate(cas)
-        positions[:, i] = ca.r
-        indices[i] = fragment.idx
-        residue_info_dict[fragment.idx] = (fragment.name, fragment.properties[:SS])
-    end
-    if(with_oxygens)
-        oxygen_positions = Matrix{T}(undef, 3, length(os))
-        for (i, (o, fragment)) in enumerate(os)
-            oxygen_positions[:, i] = o.r
+    c_count = 1
+    o_count = 1
+    for row in eachrow(result_data)
+        if row.element_atom==Elements.C
+            positions[:, c_count] = row.r_atom
+            indices[c_count] = row.parent_idx
+            residue_info_dict[row.parent_idx] = (row.name_residue, row.properties_residue[:SS])
+            c_count += 1
+        elseif with_oxygens
+            oxygen_positions[:, o_count] = row.r_atom
+            o_count += 1
         end
     end
 
@@ -120,16 +113,18 @@ function generate_points_carson_bugg(chain::Chain{T}, offset_helix_points::Bool)
 end
 
 function calculate_resolution_dependent_data(spline::Union{CatmullRom, CubicB}, resolution)
-    num_points::Vector{Int} = []
+    num_points = Vector{Int}(undef, size(spline.controlPoints, 2)-3)
     sample_mapping::Vector{Int} = []
+
+    sizehint!(sample_mapping, Int(round((size(spline.controlPoints, 2)-3) * 3.75 * resolution)))
     i = 1
     while i+3 <= size(spline.controlPoints, 2)
         distance = @views norm(spline.controlPoints[:, i+1] .- spline.controlPoints[:, i+2])
-        push!(num_points, max(2, convert(Int, ceil(resolution * distance))))
+        num_points[i] = max(2, convert(Int, ceil(resolution * distance)))
 
         if(spline.controlPointStrategy==ControlPoints.C_ALPHA)
-            first_half_num = num_points[end] ÷ 2
-            second_half_num = num_points[end]-first_half_num
+            first_half_num = num_points[i] ÷ 2
+            second_half_num = num_points[i]-first_half_num
             if(i+3!=size(spline.controlPoints, 2))
                 second_half_num -= 1
             end
@@ -138,7 +133,7 @@ function calculate_resolution_dependent_data(spline::Union{CatmullRom, CubicB}, 
                     repeat([spline.point_to_residue_indices[i+1]], first_half_num)..., 
                     repeat([spline.point_to_residue_indices[i+2]], second_half_num)...) #alloc
         elseif(spline.controlPointStrategy==ControlPoints.MID_POINTS)
-            repeats = num_points[end]
+            repeats = num_points[i]
             if(i+3!=size(spline.controlPoints, 2))
                 repeats -= 1
             end

@@ -13,7 +13,7 @@ function PlainMesh(mesh::Meshes.SimpleMesh{Dim, T, V, TP}, colors::AbstractVecto
         throw(ErrorException("Different number of vertices and colors. "))
     end
 
-    connects = Array{Int, 2}(undef, 3, Meshes.nelements(Meshes.topology(mesh))) # converting the connections first will catch all non-triangles before they lead to problems with normals
+    connects = Matrix{Int}(undef, 3, Meshes.nelements(Meshes.topology(mesh))) # converting the connections first will catch all non-triangles before they lead to problems with normals
     for (i, f) in enumerate(Meshes.elements(Meshes.topology(mesh)))
         if length(f.indices)!=3
             throw(ErrorException("mesh contained a face that contains $(length(f.indices)) instead of 3 vertices. "))

@@ -289,16 +289,16 @@ function prepare_backbone_model(chain::Chain{T}, partial_config::Union{PartialBa
     # construct spline
     local spline
     if(config.spline==Spline.CATMULL_ROM)
-        spline = CatmullRom(chain, config.control_point_strategy)
+        spline = CatmullRom{T}(chain, config.control_point_strategy)
     elseif(config.spline==Spline.CUBIC_B)
-        spline = CubicB(chain, config.control_point_strategy)
+        spline = CubicB{T}(chain, config.control_point_strategy)
     elseif(config.spline==Spline.LINEAR)
-        spline = Linear(chain, config.control_point_strategy)
+        spline = Linear{T}(chain, config.control_point_strategy)
     end
 
     # sample along spline
-    spline_points, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, config.resolution_along) #alloc
-    velocities = calculate_velocities(spline, config.resolution_along)
+    spline_points::Matrix{T}, sample_to_residue_indices::Vector{Union{Int, Nothing}} = calculate_points(spline, config.resolution_along) #alloc
+    velocities::Matrix{T} = calculate_velocities(spline, config.resolution_along)
     
     # construct local frames
     local q::Matrix{T}
@@ -307,7 +307,7 @@ function prepare_backbone_model(chain::Chain{T}, partial_config::Union{PartialBa
     if(config.frame==Frame.RMF)
         q, r, s = rmf(spline_points, velocities)
     elseif(config.frame==Frame.SECOND_SPLINE)
-        second_spline_points = calculate_minor_points(spline, config.resolution_along)
+        second_spline_points::Matrix{T} = calculate_minor_points(spline, config.resolution_along)
         q, r, s = frames_from_two_splines(spline_points, velocities, second_spline_points)
     end
 
@@ -452,10 +452,10 @@ function prepare_backbone_model(chain::Chain{T}, partial_config::Union{PartialBa
 
     # allocate memory
     num_vertices = (remaining_count+num_transition_points)*config.resolution_cross + 2 # end "caps"
-    spline_mesh = PlainMesh(Array{T}(undef, 3, num_vertices), Array{T}(undef, 3, num_vertices), Array{Int}(undef, 3, 0), Vector{NTuple{3, Int}}(undef, num_vertices))
+    spline_mesh = PlainMesh(Matrix{T}(undef, 3, num_vertices), Matrix{T}(undef, 3, num_vertices), Matrix{Int}(undef, 3, 0), Vector{NTuple{3, Int}}(undef, num_vertices))
 
     # weave spline_points and transition_points together
-    picker = Array{Int}(undef, 2, remaining_count+num_transition_points)
+    picker = Matrix{Int}(undef, 2, remaining_count+num_transition_points)
 
     index_spline_points = 1
     index_transition_points = 1
@@ -488,7 +488,8 @@ function prepare_backbone_model(chain::Chain{T}, partial_config::Union{PartialBa
 
     # iterate and create vertices
     #
-    Threads.@threads for j=1:remaining_count+num_transition_points
+    #Threads.@threads
+    for j=1:remaining_count+num_transition_points
         local color_in_thread
         if(config.color==Color.RAINBOW)
             color_in_thread = rainbow(j/(remaining_count+num_transition_points))

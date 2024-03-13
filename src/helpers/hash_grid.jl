@@ -160,7 +160,7 @@ Can be iterated over and delivers tuples (entry::U, distance) for each entry of 
 
 (When an item is exactly at world_coordinates, it is included as well and has distance==0)
 """
-function each_neighbor(grid::HashGrid{T, U}, world_coordinates::AbstractVector{T}, max_distance::Union{T, nothing} = nothing) where {T, U}
+function each_neighbour(grid::HashGrid{T, U}, world_coordinates::AbstractVector{T}, max_distance::Union{T, nothing} = nothing) where {T, U}
     if max_distance===nothing
         max_distance = grid.max_distance
     end

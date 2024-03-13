@@ -73,9 +73,9 @@ function create_reduced_surface(
         start = getStartPosition(grid, neighbourDict, probe_positions, probe_radius)
 
         if start==2
-            extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, probe_radius, new_faces, vertices, faces, number_of_faces, rs) #TODO resolve call
+            extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, probe_radius, new_faces, vertices, faces, number_of_faces, rs, probe_positions) #TODO resolve call
         elseif start==3
-            getRSComponent(faces, number_of_faces, new_faces, all_atoms, neighbourdict, probe_radius, vertices, rs, rm_vertices, new_vertices) #TODO resolve call
+            getRSComponent(faces, number_of_faces, new_faces, all_atoms, neighbourdict, probe_radius, vertices, rs, rm_vertices, new_vertices, probe_positions) #TODO resolve call
         end
     end
 
@@ -144,14 +144,14 @@ end
 
 
 
-function getStartPosition(grid, neighbourDict, probe_positions, probe_radius)
+function getStartPosition(grid, neighbourDict, probe_positions, probe_radius, rs, new_vertices, vertices)
     if findFirstFace(grid, neighbourDict, probe_positions, probe_radius)!==nothing
         return 3
     end
-    if findFirstEdge()!==nothing #TODO function call
+    if findFirstEdge(grid, probe_radius, neighbourDict, rs, new_vertices, vertices)!==nothing
         return 2
     end
-    if findFirstVertex()!==nothing #TODO function call
+    if findFirstVertex(grid.data, rs, new_vertices, vertices)!==nothing
         return 1
     end
     return 0
@@ -168,10 +168,10 @@ function findFirstFace(grid, neighbourDict, probe_positions, probe_radius)
     end
     return nothing
 end
-function findFirstEdge()
+function findFirstEdge(grid, probe_radius, neighbourDict, rs, new_vertices, vertices)
     for direction = 1:3
         for extreme = 1:2
-            edge = findEdge(direction, extreme) # TODO current
+            edge = findEdge(direction, extreme, grid, probe_radius, neighbourDict, rs, new_vertices, vertices)
             if edge!==nothing
                 return edge
             end
@@ -179,12 +179,13 @@ function findFirstEdge()
     end
     return nothing
 end
-function findFirstVertex(all_atoms::AbstractVector{AtomWrapper})
+function findFirstVertex(all_atoms::AbstractVector{AtomWrapper}, rs, new_vertices, vertices)
     for (index, atom) in enumerate(all_atoms)
         if atom.status==UNKNOWN
             if length(atom.neighbours)==0
                 vertex = RSVertex(index)
-                #TODO insert(vertex)
+                insert(vertex, rs, new_vertices, vertices)
+                all_atoms[index].status = AtomStatus.ON_SURFACE
                 
                 return vertex
             end
@@ -193,7 +194,7 @@ function findFirstVertex(all_atoms::AbstractVector{AtomWrapper})
     return nothing
 end
 
-function findFace(direction, extreme, grid::HashGrid{AtomWrapper}, neighbourDict, probe_positions, probe_radius::T) where T
+function findFace(direction, extreme, grid::HashGrid{AtomWrapper}, neighbourDict, probe_positions, probe_radius::T,rs, new_faces, new_vertices, vertices) where T
     idx1 = findFirstAtom(direction, extreme, grid.data)
     if idx1 === nothing
         return nothing
@@ -205,6 +206,7 @@ function findFace(direction, extreme, grid::HashGrid{AtomWrapper}, neighbourDict
     end
 
     possible_neighbours = neighboursOfTwoAtoms(grid.data[idx1], grid.data[idx2], neighbourDict)
+
     candidates = findThirdAtom(grid.data[idx1], grid.data[idx2], map(idx -> grid.data[idx], possible_neighbours), probe_positions, probe_radius)
     if length(candidates)==0
         return nothing
@@ -232,14 +234,13 @@ function findFace(direction, extreme, grid::HashGrid{AtomWrapper}, neighbourDict
         
         connectRSElements!(vertex1,vertex2,vertex3,e1,e2,e3,face,probe, grid.data[idx1], grid.data[idx2], grid.data[idx3])
         
-        # TODO
-        # insert(face);
-        # insert(vertex1);
-        # insert(vertex2);
-        # insert(vertex3);
-        grid.data[idx1] = AtomStatus.ON_SURFACE #TODO
-        grid.data[idx2] = AtomStatus.ON_SURFACE
-        grid.data[idx3] = AtomStatus.ON_SURFACE
+        insert(face, rs, new_faces)
+        insert(vertex1, rs, new_vertices, vertices)
+        insert(vertex2, rs, new_vertices, vertices)
+        insert(vertex3, rs, new_vertices, vertices)
+        grid.data[idx1].status = AtomStatus.ON_SURFACE
+        grid.data[idx2].status = AtomStatus.ON_SURFACE
+        grid.data[idx3].status = AtomStatus.ON_SURFACE
 
         
         return face;
@@ -251,8 +252,7 @@ function findFace(direction, extreme, grid::HashGrid{AtomWrapper}, neighbourDict
 
 end
 
-function findEdge(direction, extreme, grid, probe_radius, neighbourdict)
-    # TODO
+function findEdge(direction, extreme, grid, probe_radius, neighbourdict, rs, new_vertices, vertices)
     idx1 = findFirstAtom(direction,extreme, grid.data);
     if (idx1 == -1)
         return nothing
@@ -269,14 +269,16 @@ function findEdge(direction, extreme, grid, probe_radius, neighbourdict)
 
     edge = createFreeEdge(vertex1,vertex2, grid.data, probe_radius, neighbourdict)
     if (edge !== nothing)
-        insert(edge)
-        insert(vertex1)
-        insert(vertex2)
+        insert(edge, rs)
+        insert(vertex1, new_vertices, vertices)
+        insert(vertex2, new_vertices, vertices)
+        grid.data[idx1].status = AtomStatus.ON_SURFACE
+        grid.data[idx2].status = AtomStatus.ON_SURFACE
 
         return edge
     else
-        neighbours_[a1].erase(std::remove(neighbours_[a1].begin(), neighbours_[a1].end(), a2), neighbours_[a1].end());
-        neighbours_[a2].erase(std::remove(neighbours_[a2].begin(), neighbours_[a2].end(), a1), neighbours_[a2].end());
+        delete!(grid.data[idx1].neighbours, idx2)
+        delete!(grid.data[idx2].neighbours, idx1)
 
         return nothing
     end
@@ -345,7 +347,7 @@ function findSecondAtom(atom_index_1, direction, extreme, grid, probe_radius)
                 next_atom.radius += probe_radius; # ensure that this doesnt destroy the underlying data
                 intersection_circle = getIntersectionCircle(first_atom.atom ,next_atom.atom)
                 if intersection_circle!==nothing
-                    next_extreme = getCircleExtremum(intersection_circle,direction,extreme) #TODO function call
+                    next_extreme = getCircleExtremum(intersection_circle,direction,extreme)
                     if (((extreme == 1) && isless_tolerance(next_extreme,extreme_value)) ||
                             ((extreme != 1) && isgreater_tolerance(next_extreme,extreme_value)))
                         extreme_value = next_extreme
@@ -356,39 +358,6 @@ function findSecondAtom(atom_index_1, direction, extreme, grid, probe_radius)
         end
     end
     return second_atom_index
-end
-
-function findThirdAtom(idx1, idx2, third_candidates, all_atoms)
-    # This function computes a list of all atoms (with its probe positions)
-    # which can be touched by the probe sphere when it touches the two given
-    # atoms 
-    # TODO
-    std::pair<Index, TSphere3<double> > candidate;
-    TVector3<double> center1, center2;
-    TSphere3<double> probe;
-    probe.radius = rs_->probe_radius_;
-
-    result = []
-
-    for (i, atom) in enumerate(third_candidates)
-        center1,center2 = centerOfProbe(all_atoms[atom1],all_atoms[atom2],all_atoms[i])
-        if ()
-            if (!(Maths::isNan(center1.x) || Maths::isNan(center1.y) || Maths::isNan(center1.z)))
-                probe.r.set(center1);
-                candidate.first = *i;
-                candidate.second = probe;
-                push!(result, candidate);
-            end
-
-            if (!(Maths::isNan(center2.x) || Maths::isNan(center2.y) || Maths::isNan(center2.z)))
-                probe.r.set(center2);
-                candidate.first = *i;
-                candidate.second = probe;
-                push!(result, candidate);
-            end
-        end
-    end
-    return result
 end
 
 """ Returns the intersection circle or nothing. """
@@ -457,9 +426,8 @@ function getIntersectionPoints(s1::Atom{T}, s2::Atom{T}, s3::Atom{T}, test::Bool
     line = getIntersectionLine(plane1,plane2)
     if line!==nothing
         diff .= s1.r .- line.r
-        x1 = 0
-        x2 = 0
-        if (SolveQuadraticEquation(line.d*line.d, -diff*line.d*2, diff*diff-r1_square, x1,x2) > 0) #TODO
+        num_solutions, x1, x2 = SolveQuadraticEquation(dot(line.d, line.d), dot(-diff, line.d)*2, dot(diff, diff)-r1_square)
+        if (num_solutions > 0)
             @. p1 = line.r + x1*line.d
             @. p2 = line.r + x2*line.d
             if test
@@ -496,7 +464,7 @@ end
 
 """Returns two intersection points or (nothing, nothing). """
 function getIntersectionPoints(probe::ProbeSphere, line::Line)
-    number_of_solutions = SolveQuadraticEquation(line.d * line.d, (line.r - probe.r) * line.d * 2, (line.r - probe.r) * (line.r - probe.r) - probe.radius * probe.radius, x1, x2); #TODO
+    number_of_solutions, x1, x2 = SolveQuadraticEquation(dot(line.d, line.d), dot((line.r .- probe.r), line.d .* 2), dot((line.r .- probe.r), (line.r .- probe.r)) - probe.radius^2)
 
     if (number_of_solutions == 0)
         return nothing, nothing
@@ -712,15 +680,18 @@ Computes probe positions for all atom_indices in neighbours_inds
 and returns a list of (atom_index, probe_sphere). 
 """
 function findThirdAtom(aw1::AtomWrapper{T}, aw2::AtomWrapper{T}, neighbours::AbstractVect{AtomWrapper{T}}, probe_positions, probe_radius::T) where T
+    # This function computes a list of all atoms (with its probe positions)
+    # which can be touched by the probe sphere when it touches the two given
+    # atoms 
     result = []
     for aw3 in neighbours
         c1, c2 = centerOfProbe(aw1, aw2, aw3, probe_positions, probe_radius)
         if c1!==nothing && c2!==nothing
             if !any(isnan.(c1))
-                push!(result, (idx3, ProbeSphere(c1, probe_radius)))
+                push!(result, (aw3.index_in_list, ProbeSphere(c1, probe_radius)))
             end
             if !any(isnan.(c2))
-                push!(result, (idx3, ProbeSphere(c2, probe_radius)))
+                push!(result, (aw3.index_in_list, ProbeSphere(c2, probe_radius)))
             end
         end
     end
@@ -781,7 +752,7 @@ function insert(v::RSVertex, rs::ReducedSurface)
     push!(rs.vertices, v)
 end
 
-function insert(e::RSEdge, rs::ReducedSurface, only_rs::Bool = false) #TODO fix the one onlyrs call
+function insert(e::RSEdge, rs::ReducedSurface, only_rs::Bool = false)
     e.index = rs.number_of_edges
     rs.number_of_edges += 1
     push!(rs.edges, e)
@@ -793,11 +764,11 @@ function insert(e::RSEdge, rs::ReducedSurface, only_rs::Bool = false) #TODO fix 
 end
 
 
-function getRSComponent(faces::Vector{RSFace}, number_of_faces, new_faces::Set{RSFace}, all_atoms, neighbourdict, probe_radius, vertices, rs, rm_vertices, new_vertices)
+function getRSComponent(faces::Vector{RSFace}, number_of_faces, new_faces::Set{RSFace}, all_atoms, neighbourdict, probe_radius, vertices, rs, rm_vertices, new_vertices, probe_positions)
     i=1
     while i<=number_of_faces
         if faces[i]!==nothing
-            if !treatFace(faces[i], new_faces::Set{RSFace}, all_atoms, neighbourdict, probe_radius, vertices, rs, rm_vertices, new_vertices)
+            if !treatFace(faces[i], new_faces::Set{RSFace}, all_atoms, neighbourdict, probe_radius, vertices, rs, rm_vertices, new_vertices, probe_positions)
                 i=1
             else
                 i+=1
@@ -806,24 +777,24 @@ function getRSComponent(faces::Vector{RSFace}, number_of_faces, new_faces::Set{R
             i+=1
         end
     end
-    extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, probe_radius, new_faces, vertices, faces, number_of_faces, rs)
+    extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, probe_radius, new_faces, vertices, faces, number_of_faces, rs, probe_positions)
 end
 
-function treatFace(f::RSFace, new_faces::Set{RSFace}, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices)
+function treatFace(f::RSFace, new_faces::Set{RSFace}, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, probe_positions)
     if f.edges[1].faces[2]===nothing
-        if !treatEdge(f.edges[1], all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces)
+        if !treatEdge(f.edges[1], all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces, probe_positions)
             return false
         end
     end
 
     if f.edges[2].faces[2]===nothing
-        if !treatEdge(f.edges[2], all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces)
+        if !treatEdge(f.edges[2], all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces, probe_positions)
             return false
         end
     end
 
     if f.edges[3].faces[2]===nothing
-        if !treatEdge(f.edges[3], all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces)
+        if !treatEdge(f.edges[3], all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces, probe_positions)
             return false
         end
     end
@@ -832,7 +803,7 @@ function treatFace(f::RSFace, new_faces::Set{RSFace}, all_atoms, neighbordict, p
     return true
 end
 
-function treatEdge(edge::RSEdge, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces)
+function treatEdge(edge::RSEdge, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, new_faces, probe_positions)
     # This function rolls the probe sphere over a RSEdge.
     # From all atoms that can be touched by the probe sphere when it touches
     # the two atoms of the edge is this one selected for which the rotation
@@ -851,7 +822,7 @@ function treatEdge(edge::RSEdge, all_atoms, neighbordict, probe_radius, vertices
     idx1 = vertex1.atom_index
     idx2 = vertex2.atom_index
     try
-        idx3, probe, phi = thirdAtom(vertex1,vertex2,start_face, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices)
+        idx3, probe, phi = thirdAtom(vertex1,vertex2,start_face, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, probe_positions)
     catch e
         test_message = "PROBE SPHERE TOUCHES FOUR ATOMS"
         if e isa ErrorException && e.msg == test_message
@@ -876,6 +847,7 @@ function treatEdge(edge::RSEdge, all_atoms, neighbordict, probe_radius, vertices
         # whether it is a new vertex or not.
         # Attention: one atom can build more than one vertex!
         insert(vertex3, rs, new_vertices, vertices)
+        all_atoms[idx3].status = AtomStatus.ON_SURFACE
         edge1 = RSEdge()
         edge1.vertices = (vertex2, vertex3)
         edge1.faces[1] = new_face
@@ -962,7 +934,7 @@ function treatEdge(edge::RSEdge, all_atoms, neighbordict, probe_radius, vertices
     edge.intersection_point1 = ip2
     edge.singular = ip1!==nothing && ip2!==nothing
     if (edge.index == -1)
-        insert(edge, rs)
+        insert(edge, rs, true)
     end
     return true
 end
@@ -979,7 +951,7 @@ end
 """
 Returns (idx, probe, phi)
 """
-function thirdAtom(vertex1, vertex2, face, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices)
+function thirdAtom(vertex1, vertex2, face, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, probe_positions)
     # This function chooses from all atoms which can be touced by the probe
     # sphere when it touches the given two vertices this one, for which is
     # the rotation angle the smalest.
@@ -989,7 +961,7 @@ function thirdAtom(vertex1, vertex2, face, all_atoms, neighbordict, probe_radius
     idx1 = vertex1.atom_index
     idx2 = vertex2.atom_index
     idx_list = neighboursOfTwoAtoms(all_atoms[idx1], all_atoms[idx2], neighbordict)
-    candidates = findThirdAtom(all_atoms[idx1], all_atoms[idx2], idx_list, all_atoms)
+    candidates = findThirdAtom(all_atoms[idx1], all_atoms[idx2], map(idx -> all_atoms[idx], idx_list), probe_positions, probe_radius)
     old_angle = 3*π
     two_pi = 2*π
     axis = all_atoms[idx1].atom.r .- all_atoms[idx2].atom.r
@@ -1319,7 +1291,7 @@ function getCircles(idx1, idx2, all_atoms::AbstractVector{Atom{T}}) where T
     return nothing, nothing, nothing
 end
 
-function extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, probe_radius, new_faces, vertices, faces, number_of_faces, rs)
+function extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, probe_radius, new_faces, vertices, faces, number_of_faces, rs, probe_positions)
     while !empty(new_vertices)
         face = nothing
         vertex1 = popfirst!(new_vertices)
@@ -1339,13 +1311,14 @@ function extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, pr
             if (all_atoms[i].status == AtomStatus.UNKNOWN)
                 idx2 = i
                 idx_list = neighboursOfTwoAtoms(all_atoms[idx1], all_atoms[idx2], neighbourdict)
-                candidates = findThirdAtom(idx1, idx2, idx_list, all_atoms)
+                candidates = findThirdAtom(all_atoms[idx1], all_atoms[idx2], map(idx -> all_atoms[idx], idx_list), probe_positions, probe_radius)
                 if (empty(candidates))
                     vertex2 = RSVertex(idx2)
                     edge = createFreeEdge(vertex1,vertex2, all_atoms, probe_radius, neighbourdict)
                     if (edge !== nothing)
                         insert(edge, rs)
                         insert(vertex2, rs, new_faces, vertices)
+                        all_atoms[idx2].status = AtomStatus.ON_SURFACE
                         push!(new_vertices, vertex1)
                         push!(new_vertices, vertex2)
                         # i = neighbours_[atom1].end()--; ???
@@ -1368,6 +1341,8 @@ function extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, pr
                                 insert(face, rs, new_faces)
                                 insert(vertex2, rs, new_vertices, vertices)
                                 insert(vertex3, rs, new_vertices, vertices)
+                                all_atoms[idx2].status = AtomStatus.ON_SURFACE
+                                all_atoms[idxJ].status = AtomStatus.ON_SURFACE
                                 push!(new_vertices, vertex1)
                                 push!(new_vertices, vertex2)
                                 push!(new_vertices, vertex3)
@@ -1383,7 +1358,7 @@ function extendComponent(new_vertices, rm_vertices, all_atoms, neighbourdict, pr
             end
         end
         if face !== nothing
-            getRSComponent(faces, number_of_faces, new_faces, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices)
+            getRSComponent(faces, number_of_faces, new_faces, all_atoms, neighbordict, probe_radius, vertices, rs, rm_vertices, new_vertices, probe_positions)
         end
     end
     empty!(rm_vertices)
@@ -1429,5 +1404,31 @@ function createFreeEdge(v1::RSVertex, v2::RSVertex, all_atoms, probe_radius, nei
     end
 
     return nothing
+end
+
+"""
+Solves x^2 + bx + c = 0
+Returns (num_solutions, x1, x2). 
+When num_solutions==0, x1 and x2 are nothing. When num_solutions==1, x1 is duplicated in x2. 
+"""
+function SolveQuadraticEquation(a, b, c)
+    if a==0
+        if b==0
+            return 0, nothing, nothing
+        end 
+        return 1, c/b, c/b
+    end
+
+    discriminant = b^2 -4*a*c
+    if isless_tolerance(discriminant, 0)
+        return 0, nothing, nothing
+    end
+
+    sqrt_discriminant = sqrt(discriminant)
+    if iszero_tolerance(sqrt_discriminant)
+        return 1, -b/(2*a), -b/(2*a)
+    else
+        return 2, -b + sqrt_discriminant/(2*a), -b - sqrt_discriminant/(2*a)
+    end
 end
         

@@ -45,7 +45,12 @@ include("core/export.jl")
 include("models/backbone/backbone_config.jl")
 include("models/backbone/frame_construction.jl")
 include("models/backbone/backbone.jl")
+
+include("models/ses/rs_structs.jl")
+include("models/ses/rs_helpers.jl")
 include("models/ses/rs.jl")
+
+
 include("models/ball_and_stick.jl")
 include("models/stick.jl")
 include("models/van_der_waals.jl")

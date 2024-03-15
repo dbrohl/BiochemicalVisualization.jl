@@ -79,7 +79,7 @@ function isgreater_tolerance(a, b, tol=10^-4)
     return (a-b) >= tol
 end
 
-function isgreaterorequal_tolerance(a, b)
+function isgreaterorequal_tolerance(a, b, tol=10^-4)
     return (a-b) > -tol
 end
 

@@ -49,7 +49,7 @@ struct HashGridIterationHelper{T, U}
     grid_index::Vector{Int}
     max_distance::T
 
-    function HashGridIterationHelper{T, U}(grid::HashGrid{T, U}, world_coordinates::Vector{T}, max_distance::T) where {T, U}
+    function HashGridIterationHelper{T, U}(grid::HashGrid{T, U}, world_coordinates::AbstractVector{T}, max_distance::T) where {T, U}
         index = world_to_index(grid, world_coordinates)
         return new{T, U}(grid, world_coordinates, index, max_distance)
     end
@@ -160,7 +160,7 @@ Can be iterated over and delivers tuples (entry::U, distance) for each entry of 
 
 (When an item is exactly at world_coordinates, it is included as well and has distance==0)
 """
-function each_neighbour(grid::HashGrid{T, U}, world_coordinates::AbstractVector{T}, max_distance::Union{T, nothing} = nothing) where {T, U}
+function each_neighbour(grid::HashGrid{T, U}, world_coordinates::AbstractVector{T}, max_distance::Union{T, Nothing} = nothing) where {T, U}
     if max_distance===nothing
         max_distance = grid.max_distance
     end

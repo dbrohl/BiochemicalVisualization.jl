@@ -9,7 +9,7 @@ mutable struct CatmullRom{T<:Real}
     num_points_per_resolution::Dict{Int, Vector}
     sample_mapping_per_resolution::Dict{Int, Vector}
 
-    function CatmullRom(chain::Chain{T}, control_point_strategy) where T
+    function CatmullRom{T}(chain::Chain{T}, control_point_strategy) where T
         if(control_point_strategy==ControlPoints.C_ALPHA)
             points, point_to_residue_indices, residue_info_dict = get_c_alpha_positions(chain)
             if(length(points)<2)

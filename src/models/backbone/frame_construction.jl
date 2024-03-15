@@ -67,7 +67,7 @@ function frames_from_two_splines(major_spline_points::Matrix{T}, major_spline_ta
         rs[:, i] = minor_spline_points[:, i] .- major_spline_points[:, i]
         #project r onto plane that is perpendicular to tangent
         normalize_col!(rs, i)
-        rs[:, i] .-= (dot(rs[:, i], ts[:, i]) / dot(ts[:, i], ts[:, i]) .* ts[:, i])
+        rs[:, i] .-= (dot(rs[:, i], ts[:, i]) .* ts[:, i])
         normalize_col!(rs, i)
 
         # third axis is perpendicular to the tangent and r

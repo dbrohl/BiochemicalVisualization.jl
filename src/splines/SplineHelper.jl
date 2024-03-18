@@ -167,15 +167,24 @@ function sample_to_fragment_index_mapping(spline, resolution)
     return spline.sample_mapping_per_resolution[dict_key]
 end
 
+# function evaluate_generic_quadruple_spline(control_points::Matrix{T}, num_points, fn) where T
+#     result_points = Matrix{T}(undef, 3, sum(num_points)-length(num_points)+1)
+#     i = 1
+#     a = 1
+#     while i+3 <= size(control_points, 2) # loop over quadruples of control_points
+#         result_points[:, a:a+num_points[i]-1] = @views fn((control_points[:, i], control_points[:, i+1], control_points[:, i+2], control_points[:, i+3]), num_points[i])
+#         a += num_points[i]-1
+#         i += 1  
+#     end
+#     return result_points
+# end
+
 function evaluate_generic_quadruple_spline(control_points::Matrix{T}, num_points, fn) where T
     result_points = Matrix{T}(undef, 3, sum(num_points)-length(num_points)+1)
-    i = 1
-    a = 1
-    while i+3 <= size(control_points, 2) # loop over quadruples of control_points
-        result_points[:, a:a+num_points[i]-1] = @views fn((control_points[:, i], control_points[:, i+1], control_points[:, i+2], control_points[:, i+3]), num_points[i])
-        a += num_points[i]-1
-        i += 1  
+    cumulative_indices = cumsum([1, num_points...])
+    #Threads.@threads 
+    for i = 1:size(control_points, 2)-3 # loop over quadruples of control_points
+        result_points[:, cumulative_indices[i]-(i-1):cumulative_indices[i+1]-(i-1)-1] = @views fn((control_points[:, i], control_points[:, i+1], control_points[:, i+2], control_points[:, i+3]), num_points[i])
     end
-
     return result_points
 end

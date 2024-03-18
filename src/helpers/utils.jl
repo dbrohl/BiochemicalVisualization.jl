@@ -122,8 +122,12 @@ function handle_multichain_model(ac::System{T}, config, fixed_color, single_chai
         chain_colors = n_colors(nchains(ac))
     end
 
-    chain_reps::Vector{Union{Missing, Representation{T}}} = fill(missing, (nchains(ac)))
-    for (chain_idx, chain) in enumerate(BiochemicalAlgorithms.chains(ac))
+    chains = BiochemicalAlgorithms.chains(ac)
+
+    chain_reps::Vector{Union{Missing, Representation{T}}} = fill(missing, length(chains))
+    #Threads.@threads  
+    for chain_idx = eachindex(chains)
+        chain = chains[chain_idx]
         try
             color = nothing
             if config!==nothing && config.color==Color.UNIFORM && fixed_color!==nothing
@@ -138,7 +142,9 @@ function handle_multichain_model(ac::System{T}, config, fixed_color, single_chai
             chain_reps[chain_idx] = chain_rep
         catch e
             if e isa ErrorException #TODO
-                log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
+                if !startswith(e.msg, "too few")
+                    log_warning("Skipped chain $(chain.name), because an error occured: $(e.msg)")
+                end
             else
                 rethrow(e)
             end
